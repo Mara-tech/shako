@@ -1,0 +1,10 @@
+# Runtime
+anthropic>=0.40        # llm/ — adapter & eval generation
+optuna>=4.0            # balancer/optimizer.py — TPE search
+rich>=13.0             # cli/ — interactive interface
+
+# Optional (lazy-imported, only needed if you call them)
+matplotlib             # balancer.optimizer.plot_optimization_history
+
+# Dev / test
+pytest>=7.0
