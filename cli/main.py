@@ -12,7 +12,6 @@ from typing import Any, Callable
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import track
 from rich.prompt import Confirm, FloatPrompt, IntPrompt, Prompt
 from rich.syntax import Syntax
 from rich.table import Table
@@ -257,14 +256,20 @@ def _run_simulation(
         adapter, game_name, config["agent_type"], config["mcts_simulations"]
     )
     engine = SimulationEngine(adapter, agents, record=True, max_turns=1000)
-    return [
-        engine.run_game()
-        for _ in track(
-            range(config["n_games"]),
-            description="Playing games",
-            console=console,
+    n = config["n_games"]
+    bar_len = 20
+    results: list[GameResult] = []
+    for i in range(n):
+        results.append(engine.run_game())
+        filled = int(bar_len * (i + 1) / n)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        print(
+            f"\r  Playing games  {i + 1:>{len(str(n))}}/{n}  {bar}  {(i + 1) / n:>5.1%}",
+            end="",
+            flush=True,
         )
-    ]
+    print()
+    return results
 
 
 # -------------------------------------------------------------------- optimization

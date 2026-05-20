@@ -4,7 +4,7 @@ import json
 import pickle
 import random
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from core.base_adapter import BaseAdapter
 from core.types import Action, State
@@ -130,7 +130,8 @@ class SelfPlayTrainer:
     def train(self) -> tuple[MCTSAgent, list[dict[str, Any]]]:
         """Run the full self-play schedule. Returns the best agent + per-iteration metrics."""
         for it in range(self.n_iterations):
-            trajectories = self._self_play(self.current_agent, self.n_games_per_iter)
+            _on_sp = (lambda d, t: self._progress_line(it, "self-play", d, t)) if self.verbose else None
+            trajectories = self._self_play(self.current_agent, self.n_games_per_iter, _on_game=_on_sp)
             policy = self._build_policy(trajectories)
 
             candidate = PolicyMCTSAgent(
@@ -140,7 +141,8 @@ class SelfPlayTrainer:
                 seed=self._next_agent_seed(),
             )
 
-            win_rate = self._evaluate(candidate, self.current_agent, self.eval_games)
+            _on_ev = (lambda d, t: self._progress_line(it, "eval", d, t)) if self.verbose else None
+            win_rate = self._evaluate(candidate, self.current_agent, self.eval_games, _on_game=_on_ev)
             promoted = win_rate > self.promotion_threshold
             if promoted:
                 self.current_agent = candidate
@@ -155,10 +157,12 @@ class SelfPlayTrainer:
             }
             self.history.append(metrics)
             if self.verbose:
+                w = len(str(self.n_iterations))
                 status = "promoted" if promoted else "rejected"
                 print(
-                    f"[iter {it:>2}] policy={metrics['policy_unique_states']:>5} states  "
-                    f"candidate WR={win_rate:>6.2%}  {status}"
+                    f"\r[iter {it + 1:>{w}}/{self.n_iterations}]"
+                    f"  policy={metrics['policy_unique_states']:>5} states"
+                    f"  WR={win_rate:>6.2%}  {status}"
                 )
 
         return self.current_agent, self.history
@@ -183,17 +187,41 @@ class SelfPlayTrainer:
     def _next_agent_seed(self) -> int:
         return self._agent_seeds.randint(0, 2**31 - 1)
 
+    def _progress_line(self, it: int, phase: str, done: int, total: int) -> None:
+        w = len(str(self.n_iterations))
+        bar_len = 20
+        filled = int(bar_len * done / total) if total else 0
+        bar = "█" * filled + "░" * (bar_len - filled)
+        print(
+            f"\r[iter {it + 1:>{w}}/{self.n_iterations}]"
+            f"  {phase:<9}  {done:>{len(str(total))}}/{total}  {bar}",
+            end="",
+            flush=True,
+        )
+
     def _self_play(
         self,
         agent: MCTSAgent,
         n_games: int,
+        _on_game: Callable[[int, int], None] | None = None,
     ) -> list[tuple[list[tuple[State, Action, int]], int | None]]:
         # Same instance plays both sides. RNG state evolves between games, so
         # successive games diverge naturally (important for fixed-initial-state
         # games like Nim where the deal is deterministic).
-        return [self._play_one_game(agent, agent) for _ in range(n_games)]
+        results = []
+        for i in range(n_games):
+            results.append(self._play_one_game(agent, agent))
+            if _on_game is not None:
+                _on_game(i + 1, n_games)
+        return results
 
-    def _evaluate(self, candidate: MCTSAgent, current: MCTSAgent, n_games: int) -> float:
+    def _evaluate(
+        self,
+        candidate: MCTSAgent,
+        current: MCTSAgent,
+        n_games: int,
+        _on_game: Callable[[int, int], None] | None = None,
+    ) -> float:
         wins = 0
         for i in range(n_games):
             if i % 2 == 0:
@@ -204,6 +232,8 @@ class SelfPlayTrainer:
                 _, winner = self._play_one_game(current, candidate)
                 if winner == 1:
                     wins += 1
+            if _on_game is not None:
+                _on_game(i + 1, n_games)
         return wins / n_games
 
     def _play_one_game(
