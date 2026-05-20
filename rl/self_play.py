@@ -211,8 +211,10 @@ class SelfPlayTrainer:
         agent_a: MCTSAgent,
         agent_b: MCTSAgent,
     ) -> tuple[list[tuple[State, Action, int]], int | None]:
-        agents = [agent_a, agent_b]
         n_players = self.adapter.get_n_players()
+        # Even seats → agent_a, odd seats → agent_b.  For 2-player games this
+        # is identical to the original [agent_a, agent_b] indexing.
+        agents = [agent_a if pid % 2 == 0 else agent_b for pid in range(n_players)]
         for pid, agent in enumerate(agents):
             agent.on_game_start(pid, n_players)
 

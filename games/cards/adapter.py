@@ -123,9 +123,10 @@ class CardsAdapter(BaseAdapter):
     def get_observable_state(self, state: State, player_id: int) -> ObservableState:
         d = state.data
         opp_id = 1 - player_id
+        obs_hands: dict[int, list] = {player_id: list(d["hands"][player_id]), opp_id: []}
         return ObservableState(
             data={
-                "hand": list(d["hands"][player_id]),
+                "hands": obs_hands,
                 "opp_hand_size": len(d["hands"][opp_id]),
                 "scores": dict(d["scores"]),
                 "trick": list(d["trick"]),
@@ -168,14 +169,14 @@ class CardsAdapter(BaseAdapter):
         opp_id = 1 - my_id
 
         unseen = [v for v in self.DECK_VALUES for _ in range(self.DECK_COPIES)]
-        for c in list(d["hand"]) + list(d["played"]) + list(d["trick"]):
+        for c in list(d["hands"][my_id]) + list(d["played"]) + list(d["trick"]):
             unseen.remove(c)
 
         self._rng.shuffle(unseen)
         opp_hand = unseen[: d["opp_hand_size"]]
 
         hands: dict[int, list[int]] = {0: [], 1: []}
-        hands[my_id] = list(d["hand"])
+        hands[my_id] = list(d["hands"][my_id])
         hands[opp_id] = opp_hand
 
         return State(
