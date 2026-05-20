@@ -103,6 +103,34 @@ class BalanceOptimizer:
             ax.figure.savefig(output_path)
         return ax
 
+    def plot_param_importances(self, output_path: str | None = None):
+        """Render a matplotlib parameter-importance chart. Saves to `output_path` if given.
+
+        Requires scikit-learn (pip install scikit-learn). Returns None if unavailable.
+        Returns the matplotlib Axes for further tweaking.
+        """
+        if self.study is None:
+            raise RuntimeError("Call optimize() first.")
+        try:
+            from optuna.visualization.matplotlib import plot_param_importances
+        except ImportError:
+            print(
+                "plot_param_importances ignoré : scikit-learn manquant "
+                "(pip install scikit-learn)."
+            )
+            return None
+        try:
+            ax = plot_param_importances(self.study)
+        except ImportError:
+            print(
+                "plot_param_importances ignoré : scikit-learn manquant "
+                "(pip install scikit-learn)."
+            )
+            return None
+        if output_path is not None:
+            ax.figure.savefig(output_path)
+        return ax
+
     # ------------------------------------------------------------------ internals
 
     def _default_agent_factory(self, adapter: BaseAdapter, n_players: int) -> list[BaseAgent]:

@@ -10,6 +10,8 @@ import importlib
 from pathlib import Path
 from typing import Any, Callable
 
+import matplotlib.pyplot as plt
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, FloatPrompt, IntPrompt, Prompt
@@ -71,6 +73,9 @@ def main() -> None:
         config = _configure_simulation()
 
         results = _run_simulation(adapter, game_name, config)
+        if Confirm.ask("Afficher les graphiques de simulation ?", default=True):
+            from viz.plots import plot_simulation_results
+            plot_simulation_results(results, game_name)
 
         best_params: dict[str, Any] | None = None
         if config["optimize"]:
@@ -87,6 +92,9 @@ def main() -> None:
                 results2 = _run_simulation(new_adapter, game_name, config)
                 console.rule("[bold cyan]Re-run avec paramètres optimaux[/bold cyan]")
                 _print_report(results2, None, game_name)
+                if Confirm.ask("Afficher les graphiques du re-run ?", default=True):
+                    from viz.plots import plot_simulation_results
+                    plot_simulation_results(results2, game_name)
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrompu.[/yellow]")
 
@@ -241,8 +249,11 @@ def _train_self_play(adapter: BaseAdapter, mcts_sims: int):
         mcts_simulations=mcts_sims,
         verbose=True,
     )
-    agent, _history = trainer.train()
+    agent, history = trainer.train()
     console.print("[green]Entraînement terminé.[/green]")
+    if Confirm.ask("Afficher la courbe d'apprentissage ?", default=True):
+        from viz.plots import plot_selfplay_history
+        plot_selfplay_history(history, promotion_threshold=trainer.promotion_threshold)
     return agent
 
 
@@ -313,6 +324,10 @@ def _run_optimization(
         )
         return None
     optimizer.print_best_params()
+    if Confirm.ask("Afficher les graphiques d'optimisation ?", default=True):
+        optimizer.plot_optimization_history()
+        optimizer.plot_param_importances()
+        plt.show()
     return best
 
 
