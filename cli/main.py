@@ -6,9 +6,15 @@ Run with:
 
 from __future__ import annotations
 
+import ast
 import importlib
+import inspect
+import pickle
+import re
+import types
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal, Union, get_args, get_origin
 
 import matplotlib.pyplot as plt
 
@@ -66,13 +72,13 @@ def main() -> None:
         if adapter_class is None:
             return
 
-        adapter = _instantiate_safe(adapter_class)
+        adapter, adapter_params = _instantiate_with_params(adapter_class)
         if adapter is None:
             return
 
-        config = _configure_simulation()
+        config = _configure_simulation(game_name)
 
-        results = _run_simulation(adapter, game_name, config)
+        results = _run_simulation(adapter, game_name, config, adapter_params)
         if Confirm.ask("Afficher les graphiques de simulation ?", default=True):
             from viz.plots import plot_simulation_results
             plot_simulation_results(results, game_name)
@@ -89,7 +95,7 @@ def main() -> None:
         if best_params is not None:
             if Confirm.ask("\nRelancer la simulation avec ces paramètres ?", default=True):
                 new_adapter = adapter_class(**best_params)
-                results2 = _run_simulation(new_adapter, game_name, config)
+                results2 = _run_simulation(new_adapter, game_name, config, best_params)
                 console.rule("[bold cyan]Re-run avec paramètres optimaux[/bold cyan]")
                 _print_report(results2, None, game_name)
                 if Confirm.ask("Afficher les graphiques du re-run ?", default=True):
@@ -188,12 +194,15 @@ def _collect_parameter_space() -> dict[str, tuple]:
 # -------------------------------------------------------------------- simulation
 
 
-def _configure_simulation() -> dict[str, Any]:
+def _configure_simulation(game_name: str) -> dict[str, Any]:
     console.rule("[bold]Configuration de la simulation[/bold]")
     n_games = IntPrompt.ask("Nombre de parties", default=100)
+    choices = ["random", "greedy", "mcts", "selfplay"]
+    if _list_saved_models(game_name):
+        choices.append("loaded")
     agent_type = Prompt.ask(
         "Type d'agent",
-        choices=["random", "greedy", "mcts", "selfplay"],
+        choices=choices,
         default="mcts",
     )
     mcts_sims = 100
@@ -213,6 +222,7 @@ def _build_agents(
     game_name: str,
     agent_type: str,
     mcts_sims: int,
+    adapter_params: dict[str, Any],
 ) -> list:
     n_players = adapter.get_n_players()
     if agent_type == "random":
@@ -231,12 +241,22 @@ def _build_agents(
             for i in range(n_players)
         ]
     if agent_type == "selfplay":
-        trained = _train_self_play(adapter, mcts_sims)
+        trained = _train_self_play(adapter, mcts_sims, game_name, adapter_params)
         return [trained for _ in range(n_players)]
+    if agent_type == "loaded":
+        agent = _load_agent(game_name)
+        if agent is None:
+            return []
+        return [agent for _ in range(n_players)]
     raise ValueError(f"Type d'agent inconnu : {agent_type}")
 
 
-def _train_self_play(adapter: BaseAdapter, mcts_sims: int):
+def _train_self_play(
+    adapter: BaseAdapter,
+    mcts_sims: int,
+    game_name: str,
+    adapter_params: dict[str, Any],
+):
     console.rule("[bold]Pré-entraînement self-play[/bold]")
     n_iter = IntPrompt.ask("Itérations", default=3)
     n_games_per_iter = IntPrompt.ask("Parties par itération", default=20)
@@ -254,6 +274,18 @@ def _train_self_play(adapter: BaseAdapter, mcts_sims: int):
     if Confirm.ask("Afficher la courbe d'apprentissage ?", default=True):
         from viz.plots import plot_selfplay_history
         plot_selfplay_history(history, promotion_threshold=trainer.promotion_threshold)
+    if Confirm.ask("Sauvegarder l'agent entraîné ?", default=False):
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = _model_dir(game_name, adapter_params) / f"{ts}.pkl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".pkl.tmp")
+        try:
+            trainer.save_agent(tmp)
+            tmp.replace(path)
+            console.print(f"[green]Agent sauvegardé : {path.relative_to(_ROOT)}[/green]")
+        except Exception as e:
+            tmp.unlink(missing_ok=True)
+            console.print(f"[red]Échec de la sauvegarde : {e}[/red]")
     return agent
 
 
@@ -261,10 +293,11 @@ def _run_simulation(
     adapter: BaseAdapter,
     game_name: str,
     config: dict[str, Any],
+    adapter_params: dict[str, Any],
 ) -> list[GameResult]:
     console.rule(f"[bold]Simulation : {config['n_games']} parties[/bold]")
     agents = _build_agents(
-        adapter, game_name, config["agent_type"], config["mcts_simulations"]
+        adapter, game_name, config["agent_type"], config["mcts_simulations"], adapter_params
     )
     engine = SimulationEngine(adapter, agents, record=True, max_turns=1000)
     n = config["n_games"]
@@ -389,16 +422,190 @@ def _print_report(
 
 # -------------------------------------------------------------------- helpers
 
+_SKIP_FROM_PATH: set[str] = {"seed"}
 
-def _instantiate_safe(adapter_class: type[BaseAdapter]) -> BaseAdapter | None:
-    try:
-        return adapter_class()
-    except TypeError as e:
-        console.print(
-            f"[red]{adapter_class.__name__}() requires arguments and the CLI "
-            f"can't supply them: {e}[/red]"
-        )
+
+def _model_dir(game_name: str, params: dict[str, Any]) -> Path:
+    parts = [f"{k}={v}" for k, v in params.items() if k not in _SKIP_FROM_PATH]
+    base = _GAMES_DIR / game_name / "models" / "selfplay"
+    return base.joinpath(*parts) if parts else base
+
+
+def _list_saved_models(game_name: str) -> list[Path]:
+    base = _GAMES_DIR / game_name / "models" / "selfplay"
+    if not base.exists():
+        return []
+    return sorted(
+        (p for p in base.rglob("*.pkl") if p.stat().st_size > 0),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+
+def _load_agent(game_name: str) -> Any:
+    models = _list_saved_models(game_name)
+    if not models:
+        console.print("[red]Aucun modèle sauvegardé trouvé.[/red]")
         return None
+    base = _GAMES_DIR / game_name / "models" / "selfplay"
+    idx_map = {str(i): p for i, p in enumerate(models)}
+    console.print("\n[bold]Modèles disponibles :[/bold]")
+    for i, p in idx_map.items():
+        rel = p.relative_to(base)
+        mtime = datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+        console.print(f"  [{i}] {rel}  [dim]({mtime})[/dim]")
+    idx = Prompt.ask("Sélectionner", choices=list(idx_map), default="0")
+    path = idx_map[idx]
+    try:
+        with open(path, "rb") as f:
+            agent = pickle.load(f)
+    except Exception as e:
+        console.print(f"[red]Impossible de charger {path.name} : {e}[/red]")
+        return None
+    console.print(f"[green]Agent chargé : {path.relative_to(_ROOT)}[/green]")
+    return agent
+
+
+def _prompt_param(name: str, annotation: Any, default: Any) -> Any:
+    """Dispatch to the right Rich prompt based on the type annotation.
+
+    `annotation` is a string (when `from __future__ import annotations` is active
+    in the adapter) or a resolved type object (otherwise).
+    """
+    if isinstance(annotation, str) and annotation:
+        return _prompt_param_str(name, annotation, default)
+    if annotation is not inspect.Parameter.empty:
+        return _prompt_param_type(name, annotation, default)
+    dflt = str(default) if default is not None else ""
+    val = Prompt.ask(f"{name} [?]", default=dflt)
+    try:
+        return eval(val)  # noqa: S307
+    except Exception:
+        return val
+
+
+def _prompt_param_str(name: str, s: str, default: Any) -> Any:
+    """Handle string annotations (from __future__ import annotations)."""
+    s = s.strip()
+
+    # Literal["a", "b", ...] — extract choices
+    m = re.match(r"^Literal\[(.+)\]$", s, re.DOTALL)
+    if m:
+        try:
+            raw = ast.literal_eval(f"({m.group(1)},)")
+            # ast.unparse (Python 3.9+) wraps multi-arg slices in a tuple:
+            # Literal["a", "b"] → "Literal[('a', 'b')]" → raw = (('a', 'b'),)
+            if len(raw) == 1 and isinstance(raw[0], tuple):
+                raw = raw[0]
+            choices = [str(c) for c in raw]
+            dflt = str(default) if default is not None else (choices[0] if choices else "")
+            return Prompt.ask(name, choices=choices, default=dflt)
+        except Exception:
+            pass
+
+    # Optional[X] or X | None
+    opt_m = re.match(r"^Optional\[(.+)\]$", s)
+    if opt_m:
+        nullable, bare = True, opt_m.group(1).strip()
+    else:
+        nullable = bool(re.search(r"\|\s*None\b|\bNone\s*\|", s))
+        bare = re.sub(r"\s*\|\s*None\b|\bNone\s*\|\s*", "", s).strip()
+
+    if bare == "bool":
+        return Confirm.ask(name, default=bool(default) if default is not None else False)
+
+    if bare == "int":
+        dflt = str(default) if default is not None else ""
+        val = Prompt.ask(f"{name} [int]", default=dflt)
+        return None if (nullable and not val) else int(val) if val else None
+
+    if bare == "float":
+        dflt = str(default) if default is not None else ""
+        val = Prompt.ask(f"{name} [float]", default=dflt)
+        return None if (nullable and not val) else float(val) if val else None
+
+    if bare == "str":
+        dflt = str(default) if default is not None else ""
+        val = Prompt.ask(name, default=dflt)
+        return None if (nullable and not val) else val
+
+    # Fallback
+    dflt = str(default) if default is not None else ""
+    val = Prompt.ask(f"{name} [?]", default=dflt)
+    try:
+        return eval(val)  # noqa: S307
+    except Exception:
+        return val
+
+
+def _prompt_param_type(name: str, annotation: Any, default: Any) -> Any:
+    """Handle resolved type objects (adapters not using __future__ annotations)."""
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is Literal:
+        choices = [str(c) for c in args]
+        dflt = str(default) if default is not None else choices[0]
+        return Prompt.ask(name, choices=choices, default=dflt)
+
+    inner: Any = None
+    if origin is Union or (
+        hasattr(types, "UnionType") and isinstance(annotation, types.UnionType)
+    ):
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1:
+            inner = non_none[0]
+
+    base = inner if inner is not None else annotation
+    nullable = inner is not None
+
+    if base is bool:
+        return Confirm.ask(name, default=bool(default))
+    if base is int:
+        dflt = str(default) if default is not None else ""
+        val = Prompt.ask(f"{name} [int]", default=dflt)
+        return None if (nullable and not val) else int(val) if val else None
+    if base is float:
+        dflt = str(default) if default is not None else ""
+        val = Prompt.ask(f"{name} [float]", default=dflt)
+        return None if (nullable and not val) else float(val) if val else None
+    if base is str:
+        dflt = str(default) if default is not None else ""
+        val = Prompt.ask(name, default=dflt)
+        return None if (nullable and not val) else val
+
+    dflt = str(default) if default is not None else ""
+    val = Prompt.ask(f"{name} [?]", default=dflt)
+    try:
+        return eval(val)  # noqa: S307
+    except Exception:
+        return val
+
+
+def _instantiate_with_params(
+    adapter_class: type[BaseAdapter],
+) -> tuple[BaseAdapter, dict[str, Any]] | tuple[None, None]:
+    """Introspect the adapter's __init__ and prompt for each parameter."""
+    sig = inspect.signature(adapter_class.__init__)
+    params: dict[str, Any] = {}
+    console.print(f"\n[bold]Paramètres de {adapter_class.__name__}[/bold]")
+
+    for name, param in sig.parameters.items():
+        if name == "self":
+            continue
+        # param.annotation is a string when `from __future__ import annotations`
+        # is active in the adapter module, or a type object otherwise.
+        annotation = param.annotation
+        default = param.default
+        if default is inspect.Parameter.empty:
+            default = None
+        params[name] = _prompt_param(name, annotation, default)
+
+    try:
+        return adapter_class(**params), params
+    except Exception as e:
+        console.print(f"[red]Erreur lors de l'instanciation : {e}[/red]")
+        return None, None
 
 
 def _import_adapter_class(name: str) -> type[BaseAdapter] | None:
