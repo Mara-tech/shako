@@ -171,14 +171,23 @@ class SevenFamiliesAdapter(BaseAdapter):
 
     def get_observable_state(self, state: State, player_id: int) -> ObservableState:
         d = state.data
+        # Observable hands: own hand is real, opponents' hands are empty lists
+        # (sizes are exposed separately).  Keeping the "hands" key lets MCTS
+        # use this ObservableState as a State directly when no state_sampler is
+        # configured — get_legal_actions/apply_action both expect "hands".
+        obs_hands = {
+            pid: list(d["hands"][pid]) if pid == player_id else []
+            for pid in range(self.n_players)
+        }
         return ObservableState(
             data={
-                "hand": list(d["hands"][player_id]),
+                "hands": obs_hands,
                 "hand_sizes": {
                     pid: len(d["hands"][pid])
                     for pid in range(self.n_players)
                     if pid != player_id
                 },
+                "deck": [],          # face-down; size exposed separately
                 "deck_size": len(d["deck"]),
                 "books": {pid: list(b) for pid, b in d["books"].items()},
                 "current": d["current"],
@@ -216,13 +225,14 @@ class SevenFamiliesAdapter(BaseAdapter):
             for fid in fids
             for c in range(self.n_components)
         }
+        my_hand = d["hands"][my_id]
         unseen = [
             card for card in range(self.n_families * self.n_components)
-            if card not in d["hand"] and card not in booked
+            if card not in my_hand and card not in booked
         ]
         self._rng.shuffle(unseen)
 
-        hands: dict[int, list[int]] = {my_id: list(d["hand"])}
+        hands: dict[int, list[int]] = {my_id: list(my_hand)}
         pos = 0
         for pid in range(self.n_players):
             if pid == my_id:
