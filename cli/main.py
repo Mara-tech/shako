@@ -7,6 +7,7 @@ Run with:
 from __future__ import annotations
 
 import ast
+import copy
 import importlib
 import inspect
 import pickle
@@ -31,6 +32,7 @@ from core.engine import SimulationEngine
 from core.stats import StatsCollector
 from core.types import GameResult
 from rl.greedy_agent import GreedyAgent
+from rl.human_agent import HumanAgent
 from rl.mcts_agent import MCTSAgent
 from rl.random_agent import RandomAgent
 from rl.self_play import SelfPlayTrainer
@@ -75,6 +77,11 @@ def main() -> None:
         adapter, adapter_params = _instantiate_with_params(adapter_class)
         if adapter is None:
             return
+
+        if _list_saved_models(game_name):
+            if Confirm.ask("Jouer contre un agent entraîné ?", default=False):
+                _play_against_agent(adapter, game_name)
+                return
 
         config = _configure_simulation(game_name)
 
@@ -314,6 +321,51 @@ def _run_simulation(
         )
     print()
     return results
+
+
+def _play_against_agent(adapter: BaseAdapter, game_name: str) -> None:
+    console.rule("[bold]Jouer contre un agent entraîné[/bold]")
+    agent = _load_agent(game_name)
+    if agent is None:
+        return
+
+    n_players = adapter.get_n_players()
+    seat_choices = [str(i) for i in range(n_players)]
+    human_seat = int(
+        Prompt.ask("Votre siège (joueur)", choices=seat_choices, default="0")
+    )
+
+    play_again = True
+    while play_again:
+        agents = []
+        for pid in range(n_players):
+            if pid == human_seat:
+                agents.append(HumanAgent())
+            else:
+                agents.append(copy.deepcopy(agent))
+
+        engine = SimulationEngine(adapter, agents, record=False, max_turns=1000)
+        result = engine.run_game()
+
+        console.rule("[bold]Résultat de la partie[/bold]")
+        if result.winner_id is None:
+            console.print("[yellow]Match nul ![/yellow]")
+        elif result.winner_id == human_seat:
+            console.print("[bold green]Vous avez gagné ![/bold green]")
+        else:
+            console.print(f"[bold red]L'agent a gagné (joueur {result.winner_id}).[/bold red]")
+
+        score_table = Table(title="Scores finaux", show_header=True, header_style="bold cyan")
+        score_table.add_column("Joueur", justify="center")
+        score_table.add_column("Score", justify="right")
+        score_table.add_column("Rôle", justify="center")
+        for pid, score in result.scores.items():
+            role = "Vous" if pid == human_seat else "Agent"
+            score_table.add_row(str(pid), str(score), role)
+        console.print(score_table)
+        console.print(f"[dim]{result.n_turns} tours joués[/dim]")
+
+        play_again = Confirm.ask("Rejouer ?", default=True)
 
 
 # -------------------------------------------------------------------- optimization
