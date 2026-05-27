@@ -70,3 +70,14 @@ class BaseAdapter(ABC):
         the default `copy.deepcopy` is too slow.
         """
         return copy.deepcopy(state)  # default fallback; subclasses may override
+
+    def get_action_label(self, action: Action) -> str:
+        """Coarse label for `action`, used by the analyzer for frequency analysis.
+
+        Override to group semantically equivalent actions (e.g. "play_2_cards"
+        instead of the full card list). The default serialises action.data and
+        is correct for simple games. Overriding avoids false-positive rare-action
+        reports in games with large combinatorial action spaces.
+        """
+        import json
+        return json.dumps(action.data, sort_keys=True, default=str)

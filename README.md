@@ -7,8 +7,8 @@ from a plain-English description via the Claude API.
 
 ## Installation
 
-Requires Python 3.11+ (older versions work thanks to `from __future__ import
-annotations`, but the project is pinned to 3.11 in `pyproject.toml`).
+Requires Python 3.9+ (`from __future__ import annotations` keeps the code
+compatible; the project is pinned to 3.11 in `pyproject.toml`).
 
 ```bash
 git clone <your-repo-url> shako
@@ -32,6 +32,7 @@ Run 50 MCTS-vs-MCTS games of Nim and print balance stats:
 from games.nim.adapter import NimAdapter
 from core.engine import SimulationEngine
 from core.stats import StatsCollector
+from balancer.analyzer import DominanceAnalyzer
 from rl.mcts_agent import MCTSAgent
 
 adapter = NimAdapter(n_sticks=21)
@@ -40,13 +41,19 @@ engine = SimulationEngine(adapter, agents, record=True)
 results = [engine.run_game() for _ in range(50)]
 
 StatsCollector(results).print_report()
+DominanceAnalyzer(results, adapter=adapter).print_report()
 ```
 
 Or use the interactive CLI:
 
 ```bash
-python -m cli       # prompts for game, agent type, simulation config, then reports
+python -m cli       # prompts for game, parameters, agent type, simulation config, then reports
 ```
+
+The CLI introspects each adapter's constructor and prompts for every parameter
+with the correct type (enum choices for `Literal`, int/float/bool otherwise).
+Trained self-play agents can be saved and reloaded across sessions under
+`games/<name>/models/selfplay/`.
 
 ## Describing a new game
 
@@ -73,7 +80,8 @@ report = gen.validate_adapter(_load(path))               # runs 10 random games,
 every abstract method. [`games/nim/adapter.py`](games/nim/adapter.py) is the
 canonical reference; [`games/cards/adapter.py`](games/cards/adapter.py) shows
 the hidden-information pattern with a `sample_state` method for MCTS
-determinization.
+determinization; [`games/tictactoe/adapter.py`](games/tictactoe/adapter.py)
+shows multi-round scoring with configurable starting-player modes.
 
 ## Architecture
 
@@ -88,7 +96,8 @@ shako/
 │
 ├── games/       Concrete adapters
 │   ├── nim/                perfect-information reference
-│   └── cards/              hidden-information reference (with sample_state)
+│   ├── cards/              hidden-information reference (with sample_state)
+│   └── tictactoe/          multi-round scoring, configurable starting player
 │
 ├── rl/          Agents
 │   ├── random_agent.py     baseline / fallback
@@ -99,11 +108,14 @@ shako/
 │
 ├── balancer/    Equilibrium tooling
 │   ├── optimizer.py        BalanceOptimizer (Optuna TPE search)
-│   └── analyzer.py         DominanceAnalyzer (seat advantage, dead actions, …)
+│   └── analyzer.py         DominanceAnalyzer (seat advantage, entropy, rare actions, …)
 │
 ├── llm/         Claude-driven code generation
 │   ├── adapter_generator.py   description → games/<name>/adapter.py
 │   └── eval_generator.py      criteria → games/<name>/eval.py
+│
+├── viz/         Visualisation helpers
+│   └── plots.py            simulation curves, self-play history, Optuna charts
 │
 ├── cli/         Interactive interface (python -m cli)
 └── tests/       pytest suite
@@ -116,8 +128,40 @@ aggregate that into metrics and balance pathologies → BalanceOptimizer wraps
 the entire pipeline in an Optuna search over adapter constructor parameters.
 
 `BaseAdapter` is the single integration point: anything that implements its
-nine methods works with every agent, the engine, the analyzer, and the
+nine abstract methods works with every agent, the engine, the analyzer, and the
 optimizer without modification.
+
+## Balance analysis
+
+`DominanceAnalyzer` detects four classes of pathology:
+
+| Detector | What it flags |
+|---|---|
+| `detect_seat_advantage` | First/last player wins disproportionately |
+| `detect_low_action_entropy` | An agent collapses onto a tiny set of actions |
+| `detect_rare_actions` | Action labels that appear anomalously rarely |
+| `detect_runaway_duration` | Games that hit `max_turns` or have extreme length variance |
+
+Pass `adapter=` to enable the `get_action_label` hook. By default the full
+serialised `action.data` is used as the label, which is fine for simple games.
+For games with large combinatorial action spaces (e.g. a card game where each
+action encodes which cards to play and which to pick up), override
+`get_action_label` in the adapter to return a coarser category string such as
+`"play_2_cards"`. This prevents a flood of low-signal `rare_actions` issues
+caused by combinatorial rarity rather than game-design imbalance.
+
+The `detect_rare_actions` threshold also scales automatically with the observed
+action space size: a label is only flagged if it appears less than 10 % of its
+expected uniform frequency, so large action spaces do not generate spurious
+issues even without a custom `get_action_label`.
+
+```python
+# Custom label for a card game
+class MyCardAdapter(BaseAdapter):
+    def get_action_label(self, action: Action) -> str:
+        n = len(action.data["cards_played"])
+        return f"play_{n}_card{'s' if n != 1 else ''}"
+```
 
 ## Running tests
 

@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from core.base_adapter import BaseAdapter
 from core.types import GameResult
 
 
@@ -44,15 +45,27 @@ class DominanceAnalyzer:
     issues, just without action-level findings.
     """
 
-    def __init__(self, results: list[GameResult]) -> None:
+    def __init__(
+        self,
+        results: list[GameResult],
+        adapter: BaseAdapter | None = None,
+    ) -> None:
         if not results:
             raise ValueError("DominanceAnalyzer requires at least one GameResult")
         self.results = results
+        self._adapter = adapter
         seats: set[int] = set()
         for r in results:
             seats.update(r.scores.keys())
         self._n_players = (max(seats) + 1) if seats else 0
         self._has_actions = all(r.actions is not None for r in results)
+
+    # ------------------------------------------------------------------ helpers
+
+    def _label(self, action: Any) -> str:
+        if self._adapter is not None:
+            return self._adapter.get_action_label(action)
+        return json.dumps(action.data, sort_keys=True, default=str)
 
     # ------------------------------------------------------------------ detectors
 
@@ -94,7 +107,7 @@ class DominanceAnalyzer:
         per_player: dict[int, Counter[str]] = {pid: Counter() for pid in range(self._n_players)}
         for r in self.results:
             for _turn, pid, action in r.actions or []:
-                per_player[pid][_action_key(action)] += 1
+                per_player[pid][self._label(action)] += 1
 
         issues: list[Issue] = []
         for pid, counter in per_player.items():
@@ -144,26 +157,41 @@ class DominanceAnalyzer:
         counter: Counter[str] = Counter()
         for r in self.results:
             for _turn, _pid, action in r.actions or []:
-                counter[_action_key(action)] += 1
+                counter[self._label(action)] += 1
         total = sum(counter.values())
         if total == 0:
             return []
-        issues: list[Issue] = []
-        for key, count in counter.items():
-            frac = count / total
-            if frac < threshold:
-                issues.append(
-                    Issue(
-                        category="rare_action",
-                        severity="low",
-                        description=(
-                            f"action {_truncate(key, 50)} used in only "
-                            f"{frac:.2%} of moves ({count}/{total})"
-                        ),
-                        metric=frac,
-                    )
-                )
-        return issues
+
+        n_distinct = len(counter)
+        # Adapt threshold to action-space size: flag only labels appearing
+        # less than 10 % of their expected uniform frequency.
+        # For  9 labels: eff ≈ 0.011 → same behaviour as before.
+        # For 200 labels: eff = 0.0005 → only statistically anomalous labels flagged.
+        effective_threshold = min(threshold, 1.0 / (10 * n_distinct))
+
+        rare = [
+            (k, c / total)
+            for k, c in counter.items()
+            if c / total < effective_threshold
+        ]
+        if not rare:
+            return []
+
+        rare_frac = len(rare) / n_distinct
+        rarest_key, rarest_freq = min(rare, key=lambda x: x[1])
+        severity: Severity = "medium" if rare_frac > 0.5 else "low"
+        return [
+            Issue(
+                category="rare_actions",
+                severity=severity,
+                description=(
+                    f"{len(rare)}/{n_distinct} action labels appear in fewer than "
+                    f"{effective_threshold:.3%} of moves "
+                    f"(rarest: {_truncate(rarest_key, 40)} at {rarest_freq:.3%})"
+                ),
+                metric=rare_frac,
+            )
+        ]
 
     def detect_runaway_duration(self) -> Issue | None:
         timed_out = sum(1 for r in self.results if r.timed_out)
@@ -237,10 +265,6 @@ class DominanceAnalyzer:
         print(f"{header} — {len(issues)} issue(s) ===")
         for issue in issues:
             print(f"  [{issue.severity.upper():>8}] {issue.category}: {issue.description}")
-
-
-def _action_key(action: Any) -> str:
-    return json.dumps(action.data, sort_keys=True, default=str)
 
 
 def _truncate(s: str, n: int) -> str:

@@ -90,14 +90,14 @@ def main() -> None:
             if param_space:
                 best_params = _run_optimization(adapter_class, param_space, config)
 
-        _print_report(results, best_params, game_name)
+        _print_report(results, best_params, game_name, adapter)
 
         if best_params is not None:
             if Confirm.ask("\nRelancer la simulation avec ces paramètres ?", default=True):
                 new_adapter = adapter_class(**best_params)
                 results2 = _run_simulation(new_adapter, game_name, config, best_params)
                 console.rule("[bold cyan]Re-run avec paramètres optimaux[/bold cyan]")
-                _print_report(results2, None, game_name)
+                _print_report(results2, None, game_name, new_adapter)
                 if Confirm.ask("Afficher les graphiques du re-run ?", default=True):
                     from viz.plots import plot_simulation_results
                     plot_simulation_results(results2, game_name)
@@ -371,6 +371,7 @@ def _print_report(
     results: list[GameResult],
     best_params: dict[str, Any] | None,
     game_name: str,
+    adapter: BaseAdapter,
 ) -> None:
     stats = StatsCollector(results)
     summary = stats.summary()
@@ -401,7 +402,7 @@ def _print_report(
         )
     console.print(players)
 
-    analyzer = DominanceAnalyzer(results)
+    analyzer = DominanceAnalyzer(results, adapter=adapter)
     issues = analyzer.report()
     if issues:
         console.print("\n[bold]Pathologies d'équilibrage[/bold]")
