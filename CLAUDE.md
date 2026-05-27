@@ -57,4 +57,5 @@ the analyzer, and the optimizer without modification.
 - **Run `pytest tests/` before marking a task done.** If tests fail, fix them before concluding.
 - **Pick the right reference implementation** for a new game: `nim/` by default, `cards/` for hidden information, `tictactoe/` for multi-round or configurable starting player.
 - **Create a `rules.md`** in the game's folder when adding a new game. Describe the rules in plain language: players, actions, win/draw/loss conditions, edge cases.
+- **Create a test** when adding a new game in `tests/` folder.
 - **Update the Module map table in this file** when a new top-level module is added to the project.
