@@ -212,9 +212,9 @@ def _configure_simulation(game_name: str) -> dict[str, Any]:
         choices=choices,
         default="mcts",
     )
-    mcts_sims = 100
+    mcts_sims = 500
     if agent_type in ("mcts", "selfplay"):
-        mcts_sims = IntPrompt.ask("MCTS simulations par coup", default=100)
+        mcts_sims = IntPrompt.ask("MCTS simulations par coup", default=500)
     optimize = Confirm.ask("Activer l'optimisation des paramètres ?", default=False)
     return {
         "n_games": n_games,
@@ -328,6 +328,15 @@ def _play_against_agent(adapter: BaseAdapter, game_name: str) -> None:
     agent = _load_agent(game_name)
     if agent is None:
         return
+
+    current_sims = getattr(agent, "n_simulations", None)
+    if current_sims is not None:
+        console.print(f"[dim]Agent chargé avec {current_sims} simulations MCTS.[/dim]")
+        n_sims = IntPrompt.ask(
+            "Simulations MCTS par coup",
+            default=current_sims,
+        )
+        agent.n_simulations = n_sims
 
     n_players = adapter.get_n_players()
     seat_choices = [str(i) for i in range(n_players)]
