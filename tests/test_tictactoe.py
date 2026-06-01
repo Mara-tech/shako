@@ -326,3 +326,31 @@ def test_starting_player_modes_complete_without_error(mode: str) -> None:
     engine = SimulationEngine(adapter, agents)
     results = [engine.run_game() for _ in range(10)]
     assert len(results) == 10
+
+
+def test_alternate_starters_integration() -> None:
+    """In alternate mode, round_starter must flip after every real round of actual play."""
+    adapter = TicTacToeAdapter(starting_player="alternate", max_rounds=6, seed=0)
+    agents = [RandomAgent(seed=0), RandomAgent(seed=1)]
+
+    state = adapter.get_initial_state()
+    starters: list[int] = [state.data["round_starter"]]
+    prev_round: int = state.data["round"]
+
+    while not adapter.is_terminal(state):
+        pid = adapter.get_current_player(state)
+        obs = adapter.get_observable_state(state, pid)
+        actions = adapter.get_legal_actions(state, pid)
+        action = agents[pid].choose_action(obs, actions)
+        state = adapter.apply_action(state, action, pid)
+
+        cur_round = state.data["round"]
+        if cur_round != prev_round and not state.data["game_over"]:
+            starters.append(state.data["round_starter"])
+            prev_round = cur_round
+
+    assert len(starters) >= 2, "Expected at least 2 rounds to check alternation"
+    for i in range(len(starters) - 1):
+        assert starters[i + 1] == 1 - starters[i], (
+            f"Round {i + 1} starter should be {1 - starters[i]}, got {starters[i + 1]}"
+        )

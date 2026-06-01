@@ -45,7 +45,7 @@ class TicTacToeAdapter(BaseAdapter):
 
     def __init__(
         self,
-        starting_player: Literal["random", "alternate", "constant"] = "random",
+        starting_player: Literal["random", "alternate", "constant"] = "alternate",
         max_rounds: int = 9,
         seed: int | None = None,
     ) -> None:
