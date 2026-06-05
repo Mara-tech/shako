@@ -34,7 +34,7 @@ def plot_simulation_results(
         min(1.96 * math.sqrt(max(p * (1 - p) / n, 0)), p, 1 - p)
         for p in win_rates
     ]
-    bars = ax.bar([str(pid) for pid in player_ids], win_rates, yerr=errors,
+    ax.bar([str(pid) for pid in player_ids], win_rates, yerr=errors,
                   capsize=5, color="steelblue", alpha=0.8)
     ax.axhline(1 / n_players, linestyle="--", color="gray", linewidth=1,
                label=f"balance ({1/n_players:.0%})")
