@@ -20,7 +20,7 @@ def plot_simulation_results(
     n_players = len(player_ids)
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-    fig.suptitle(f"{game_name} — {n} parties", fontweight="bold")
+    fig.suptitle(f"{game_name} — {n} games", fontweight="bold")
 
     # --- Win rate ---
     ax = axes[0]
@@ -37,10 +37,10 @@ def plot_simulation_results(
     bars = ax.bar([str(pid) for pid in player_ids], win_rates, yerr=errors,
                   capsize=5, color="steelblue", alpha=0.8)
     ax.axhline(1 / n_players, linestyle="--", color="gray", linewidth=1,
-               label=f"équilibre ({1/n_players:.0%})")
+               label=f"balance ({1/n_players:.0%})")
     ax.set_ylim(0, 1)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:.0%}"))
-    ax.set_xlabel("Joueur")
+    ax.set_xlabel("Player")
     ax.set_title("Win rate")
     ax.legend(fontsize=8)
 
@@ -51,8 +51,8 @@ def plot_simulation_results(
     for patch in bp["boxes"]:
         patch.set_facecolor("steelblue")
         patch.set_alpha(0.6)
-    ax.set_xlabel("Joueur")
-    ax.set_title("Distribution des scores")
+    ax.set_xlabel("Player")
+    ax.set_title("Score Distribution")
 
     # --- Game lengths ---
     ax = axes[2]
@@ -60,13 +60,13 @@ def plot_simulation_results(
     ax.hist(turns, bins=min(30, n), color="steelblue", alpha=0.8, edgecolor="white")
     median = sorted(turns)[len(turns) // 2]
     ax.axvline(median, linestyle="--", color="gray", linewidth=1,
-               label=f"médiane = {median}")
+               label=f"median = {median}")
     timed_out = sum(1 for r in results if r.timed_out)
     if timed_out:
-        ax.set_title(f"Longueur des parties ({timed_out} timeouts)")
+        ax.set_title(f"Game length ({timed_out} timeouts)")
     else:
-        ax.set_title("Longueur des parties")
-    ax.set_xlabel("Nombre de tours")
+        ax.set_title("Game length")
+    ax.set_xlabel("Rounds count")
     ax.legend(fontsize=8)
 
     fig.tight_layout()
@@ -94,12 +94,12 @@ def plot_selfplay_history(
         ax.scatter(it, wr, color="green" if prom else "red",
                    s=60, zorder=3, linewidths=0)
     ax.axhline(promotion_threshold, linestyle="--", color="gray", linewidth=1,
-               label=f"seuil de promotion ({promotion_threshold:.0%})")
+               label=f"promotion threshold ({promotion_threshold:.0%})")
     ax.scatter([], [], color="green", s=60, label="promu")
     ax.scatter([], [], color="red", s=60, label="rejeté")
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:.0%}"))
-    ax.set_xlabel("Itération")
-    ax.set_title("Self-play — win rate du candidat")
+    ax.set_xlabel("Iteration")
+    ax.set_title("Self-play — candidate win rate")
     ax.legend(fontsize=8)
     fig.tight_layout()
     if output_path is not None:
