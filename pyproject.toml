@@ -7,7 +7,12 @@ name = "shako"
 version = "0.1.0"
 description = "Game balancing framework using RL, MCTS, and LLM agents"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "anthropic>=0.40",
+  "optuna>=4.0",
+  "rich>=13.0",
+  "matplotlib>=3.8",
+]
 
 [project.optional-dependencies]
 dev = ["pytest", "mypy", "ruff"]
