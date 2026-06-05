@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from itertools import combinations
+from typing import Any
 
 from core.base_adapter import BaseAdapter
 from core.types import Action, ObservableState, State
@@ -234,7 +235,7 @@ class OdinAdapter(BaseAdapter):
         # used as a valid State fallback by MCTS when no state_sampler is
         # provided (State(data=dict(obs.data)) must not KeyError on "hands").
         # Actual opponent sizes are kept separately for agents and sample_state.
-        obs_hands = {pid: [] for pid in range(d["n_players"])}
+        obs_hands: dict[int, list[Any]] = {pid: [] for pid in range(d["n_players"])}
         obs_hands[player_id] = list(d["hands"][player_id])
         return ObservableState(
             data={

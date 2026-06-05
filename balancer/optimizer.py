@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from matplotlib.figure import Figure as MplFigure
+
 import optuna
 
 from core.base_adapter import BaseAdapter
@@ -101,7 +103,7 @@ class BalanceOptimizer:
         ax = plot_optimization_history(self.study)
         if output_path is not None:
             fig = ax.get_figure()
-            assert fig is not None
+            assert isinstance(fig, MplFigure)
             fig.savefig(output_path)
         return ax
 
@@ -131,7 +133,7 @@ class BalanceOptimizer:
             return None
         if output_path is not None:
             fig = ax.get_figure()
-            assert fig is not None
+            assert isinstance(fig, MplFigure)
             fig.savefig(output_path)
         return ax
 
