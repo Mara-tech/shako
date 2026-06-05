@@ -56,6 +56,7 @@ def test_optimizer_best_score_improves_versus_search_baseline() -> None:
     )
     optimizer.optimize()
 
+    assert optimizer.study is not None
     values = [t.value for t in optimizer.study.trials if t.value is not None]
     assert optimizer.study.best_value == min(values)
     assert optimizer.study.best_value < statistics.mean(values), (

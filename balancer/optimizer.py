@@ -100,7 +100,9 @@ class BalanceOptimizer:
 
         ax = plot_optimization_history(self.study)
         if output_path is not None:
-            ax.figure.savefig(output_path)
+            fig = ax.get_figure()
+            assert fig is not None
+            fig.savefig(output_path)
         return ax
 
     def plot_param_importances(self, output_path: str | None = None):
@@ -128,7 +130,9 @@ class BalanceOptimizer:
             )
             return None
         if output_path is not None:
-            ax.figure.savefig(output_path)
+            fig = ax.get_figure()
+            assert fig is not None
+            fig.savefig(output_path)
         return ax
 
     # ------------------------------------------------------------------ internals

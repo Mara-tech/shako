@@ -188,6 +188,8 @@ def _collect_parameter_space() -> dict[str, tuple]:
         if not pname:
             break
         ptype = Prompt.ask("  Type", choices=["int", "float"], default="int")
+        lo: int | float
+        hi: int | float
         if ptype == "int":
             lo = IntPrompt.ask("  Min")
             hi = IntPrompt.ask("  Max")
