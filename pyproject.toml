@@ -14,6 +14,9 @@ dependencies = [
   "rich>=13.0",
   "matplotlib>=3.8",
 ]
+authors = [
+  {name = "Pierrick Baudet", email = "pbaudet.enseirb@gmail.com"}
+]
 
 [project.urls]
 "Home Page" = "https://github.com/Mara-tech/shako"
