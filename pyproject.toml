@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "shako"
 version = "0.1.0"
 description = "Game balancing framework using RL, MCTS, and LLM agents"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "anthropic>=0.40",
