@@ -15,6 +15,9 @@ dependencies = [
   "matplotlib>=3.8",
 ]
 
+[project.urls]
+"Home Page" = "https://github.com/Mara-tech/shako"
+
 [project.optional-dependencies]
 dev = ["pytest", "mypy", "ruff"]
 
