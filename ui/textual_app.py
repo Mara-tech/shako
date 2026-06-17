@@ -71,7 +71,7 @@ class ShakTUIApp(App):
             from ui.grid_widget import GridWidget
 
             cfg = self._grid_config
-            render_cfg = getattr(self._adapter, "get_grid_render_config", lambda: {})()
+            render_cfg: dict[str, Any] = getattr(self._adapter, "get_grid_render_config", lambda: {})()
             yield GridWidget(
                 cfg["rows"],
                 cfg["cols"],
@@ -119,7 +119,7 @@ class ShakTUIApp(App):
         if self._grid_config:
             from ui.grid_widget import GridWidget
 
-            info = self._adapter.get_grid_info(obs_state)
+            info: dict[str, Any] = getattr(self._adapter, "get_grid_info")(obs_state)
             self.query_one("#grid", GridWidget).set_board(info["board"])
         else:
             renderable = self._adapter.get_rich_renderable(obs_state)
