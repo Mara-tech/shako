@@ -166,7 +166,7 @@ def test_can_reach_last_main_track_square_then_stop() -> None:
 def test_home_column_entry_rule_with_track_size_56() -> None:
     adapter = LudoAdapter(n_players=4, track_size=56, seed=0)
     last = 55  # track_size - 1
-    done = 61  # track_size + HOME_COL - 1
+    # done = 61  # track_size + HOME_COL - 1
     pos = _blank()
     pos[0][0] = last
     s = _make_state(pos, dice=3)

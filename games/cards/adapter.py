@@ -169,7 +169,7 @@ class CardsAdapter(BaseAdapter):
                 who = "you" if pid == p else f"P{pid}"
                 t.append(f"{who}▸[{card}]  ", style="yellow" if pid == p else "red")
         scores = d["scores"]
-        t.append(f"\n\nScore: ", style="dim")
+        t.append("\n\nScore: ", style="dim")
         t.append(str(scores[p]), style="bold green")
         t.append(" — ", style="dim")
         t.append(str(scores[opp]), style="bold red")
