@@ -125,7 +125,11 @@ def _load_existing_game() -> tuple[str, type[BaseAdapter] | None]:
         console.print(f"[red]Aucun adapter trouvé sous {_GAMES_DIR}.[/red]")
         return "", None
 
-    name = Prompt.ask("Quel jeu", choices=available, default=available[0])
+    for i, g in enumerate(available):
+        console.print(f"  [cyan][{i}][/cyan] {g}")
+    idx_choices = [str(i) for i in range(len(available))]
+    idx = Prompt.ask("Quel jeu", choices=idx_choices, default="0")
+    name = available[int(idx)]
     adapter_class = _import_adapter_class(name)
     return name, adapter_class
 
