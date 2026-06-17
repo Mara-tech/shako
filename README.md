@@ -55,6 +55,27 @@ with the correct type (enum choices for `Literal`, int/float/bool otherwise).
 Trained self-play agents can be saved and reloaded across sessions under
 `games/<name>/models/selfplay/`.
 
+For non-interactive self-play training (e.g. CI or overnight runs), use
+`scripts/train.py`:
+
+```bash
+python scripts/train.py --game nim --n-iterations 20 --seed 42
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--game` | *(required)* | Game folder name under `games/` |
+| `--n-iterations` | `10` | Number of train/eval cycles |
+| `--n-games-per-iter` | `50` | Self-play games per training iteration |
+| `--eval-games` | `40` | Evaluation games used to decide promotion |
+| `--mcts-simulations` | `100` | MCTS simulations per move |
+| `--promotion-threshold` | `0.55` | Win-rate required to promote the candidate |
+| `--seed` | *(random)* | RNG seed for reproducibility |
+
+On completion the script saves the trained agent to
+`games/<name>/models/selfplay/<timestamp>.pkl` and prints how many iterations
+promoted the candidate model.
+
 ## Describing a new game
 
 Two paths.
