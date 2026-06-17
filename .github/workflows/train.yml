@@ -1,0 +1,72 @@
+name: Train self-play agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: Game name
+        type: choice
+        options:
+          - nim
+          - tictactoe
+          - cards
+          - connect4
+          - ludo
+          - odin
+          - seven_families
+        default: nim
+      n_iterations:
+        description: Training iterations
+        type: number
+        default: 10
+      n_games_per_iter:
+        description: Self-play games per iteration
+        type: number
+        default: 50
+      eval_games:
+        description: Evaluation games per candidate
+        type: number
+        default: 40
+      mcts_simulations:
+        description: MCTS simulations per move
+        type: number
+        default: 100
+      seed:
+        description: "RNG seed (leave empty for random)"
+        type: string
+        default: "0"
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Run training
+        run: |
+          python scripts/train.py \
+            --game "${{ inputs.game }}" \
+            --n-iterations "${{ inputs.n_iterations }}" \
+            --n-games-per-iter "${{ inputs.n_games_per_iter }}" \
+            --eval-games "${{ inputs.eval_games }}" \
+            --mcts-simulations "${{ inputs.mcts_simulations }}" \
+            ${{ inputs.seed != '' && format('--seed {0}', inputs.seed) || '' }}
+
+      - name: Commit model
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add games/
+          git diff --cached --quiet || git commit -m "train: ${{ inputs.game }} self-play (iter=${{ inputs.n_iterations }}, games=${{ inputs.n_games_per_iter }}, sims=${{ inputs.mcts_simulations }}, seed=${{ inputs.seed }})"
+          git push
