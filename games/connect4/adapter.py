@@ -121,3 +121,43 @@ class ConnectFourAdapter(BaseAdapter):
 
     def get_action_label(self, action: Action) -> str:
         return str(action.data["col"])
+
+    def get_rich_renderable(self, obs_state: ObservableState):
+        from rich.text import Text
+
+        board = obs_state.data["board"]
+        syms = {0: "·", 1: "●", 2: "●"}
+        cols = {0: "dim", 1: "bold red", 2: "bold yellow"}
+        t = Text()
+        for r in range(self.rows):
+            for c in range(self.cols):
+                if c:
+                    t.append(" ")
+                val = board[self._idx(r, c)]
+                t.append(syms[val], style=cols[val])
+            t.append("\n")
+        t.append(" ".join(str(c) for c in range(self.cols)), style="dim cyan")
+        return t
+
+    def get_grid_config(self) -> dict:
+        return {"rows": self.rows, "cols": self.cols, "mode": "column"}
+
+    def get_grid_render_config(self) -> dict:
+        return {
+            "symbols": {0: "·", 1: "●", 2: "●"},
+            "colors": {0: "dim", 1: "bold red", 2: "bold yellow"},
+        }
+
+    def get_grid_info(self, obs_state: ObservableState) -> dict:
+        return {"board": obs_state.data["board"]}
+
+    def get_action_for_click(
+        self, _row: int, col: int, legal_actions: list[Action]
+    ) -> Action | None:
+        for a in legal_actions:
+            if a.data["col"] == col:
+                return a
+        return None
+
+    def get_action_display(self, action: Action) -> str:
+        return f"Column {action.data['col']}"

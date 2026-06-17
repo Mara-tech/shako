@@ -75,3 +75,20 @@ class NimAdapter(BaseAdapter):
     def clone_state(self, state: State) -> State:
         # All values are ints, so a shallow dict copy is a deep copy.
         return State(data=dict(state.data))
+
+    def get_rich_renderable(self, obs_state: ObservableState):
+        from rich.text import Text
+
+        sticks = int(obs_state.data["sticks"])
+        t = Text()
+        t.append(f"Pile: {sticks} stick{'s' if sticks != 1 else ''}\n\n")
+        visual = min(sticks, 50)
+        t.append("  " + "│" * visual, style="bold yellow")
+        if sticks > 50:
+            t.append(f" +{sticks - 50} more", style="dim")
+        t.append(f"\n\nMax take: {self.max_take}", style="dim")
+        return t
+
+    def get_action_display(self, action: Action) -> str:
+        n = action.data["take"]
+        return f"Take {n} stick{'s' if n != 1 else ''}"

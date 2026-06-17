@@ -145,6 +145,59 @@ class TicTacToeAdapter(BaseAdapter):
             player_id=player_id,
         )
 
+    def get_rich_renderable(self, obs_state: ObservableState):
+        from rich.text import Text
+
+        board = obs_state.data["board"]
+        syms = ["·", "X", "O"]
+        cols = ["dim", "bold red", "bold blue"]
+        t = Text()
+        for r in range(3):
+            for c in range(3):
+                if c:
+                    t.append(" │ ", style="dim")
+                val = board[r * 3 + c]
+                t.append(syms[val], style=cols[val])
+            if r < 2:
+                t.append("\n───┼───┼───\n", style="dim")
+        scores = obs_state.data["scores"]
+        p = obs_state.player_id
+        rnd = obs_state.data["round"]
+        t.append(f"\n\nRound {rnd + 1}  Score: ", style="dim")
+        t.append(str(scores[p]), style="bold green")
+        t.append(" — ", style="dim")
+        t.append(str(scores[1 - p]), style="bold red")
+        return t
+
+    def get_grid_config(self) -> dict:
+        return {"rows": 3, "cols": 3, "mode": "cell"}
+
+    def get_grid_render_config(self) -> dict:
+        return {
+            "symbols": {0: "·", 1: "X", 2: "O"},
+            "colors": {0: "dim", 1: "bold red", 2: "bold blue"},
+        }
+
+    def get_grid_info(self, obs_state: ObservableState) -> dict:
+        return {"board": obs_state.data["board"]}
+
+    def get_action_for_click(
+        self, row: int, col: int, legal_actions: list[Action]
+    ) -> Action | None:
+        pos = row * 3 + col
+        for a in legal_actions:
+            if a.data["pos"] == pos:
+                return a
+        return None
+
+    def get_action_display(self, action: Action) -> str:
+        pos = action.data["pos"]
+        r, c = divmod(pos, 3)
+        names = ["Top-left", "Top-center", "Top-right",
+                 "Mid-left", "Center", "Mid-right",
+                 "Bot-left", "Bot-center", "Bot-right"]
+        return f"{names[pos]} ({r},{c})"
+
     def clone_state(self, state: State) -> State:
         d = state.data
         return State(

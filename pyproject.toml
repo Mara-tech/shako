@@ -23,6 +23,7 @@ authors = [
 
 [project.optional-dependencies]
 dev = ["pytest", "mypy", "ruff"]
+tui = ["textual>=0.50"]
 
 [tool.setuptools.packages.find]
 where = ["."]

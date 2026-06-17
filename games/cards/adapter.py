@@ -152,6 +152,33 @@ class CardsAdapter(BaseAdapter):
             }
         )
 
+    def get_rich_renderable(self, obs_state: ObservableState):
+        from rich.text import Text
+
+        d = obs_state.data
+        p = obs_state.player_id
+        opp = 1 - p
+        t = Text()
+        t.append("Your hand: ", style="bold green")
+        for card in sorted(d["hands"][p]):
+            t.append(f"[{card}] ", style="bold cyan")
+        t.append(f"  (opponent: {d['opp_hand_size']} card(s))\n", style="dim")
+        if d["trick"]:
+            t.append("\nTrick: ", style="dim")
+            for card, pid in zip(d["trick"], d["trick_players"]):
+                who = "you" if pid == p else f"P{pid}"
+                t.append(f"{who}▸[{card}]  ", style="yellow" if pid == p else "red")
+        scores = d["scores"]
+        t.append(f"\n\nScore: ", style="dim")
+        t.append(str(scores[p]), style="bold green")
+        t.append(" — ", style="dim")
+        t.append(str(scores[opp]), style="bold red")
+        t.append(f"  (tricks played: {len(d['played'])})", style="dim")
+        return t
+
+    def get_action_display(self, action: Action) -> str:
+        return f"Play [{action.data['card']}]"
+
     # ------------------------------------------------------------------ MCTS support
 
     def sample_state(self, observable_state: ObservableState) -> State:

@@ -71,6 +71,15 @@ class BaseAdapter(ABC):
         """
         return copy.deepcopy(state)  # default fallback; subclasses may override
 
+    def get_rich_renderable(self, obs_state: ObservableState):
+        """Return a Rich ``RenderableType`` for display in the Rich/Textual human UI.
+
+        Override to show a visual board instead of a raw dict.
+        Return ``None`` (default) to fall back to dict display.
+        This method is intentionally non-abstract: adapters opt in at their own pace.
+        """
+        return None
+
     def get_action_label(self, action: Action) -> str:
         """Coarse label for `action`, used by the analyzer for frequency analysis.
 

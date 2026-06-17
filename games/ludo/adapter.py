@@ -181,3 +181,32 @@ class LudoAdapter(BaseAdapter):
 
     def get_action_label(self, action: Action) -> str:
         return "pass" if action.data["piece"] < 0 else "move"
+
+    def get_rich_renderable(self, obs_state: ObservableState):
+        from rich.text import Text
+
+        d = obs_state.data
+        t = Text()
+        for p, pos_list in enumerate(d["positions"]):
+            is_me = p == obs_state.player_id
+            label = f"P{p}" + (" (you)" if is_me else "")
+            t.append(f"{label}: ", style="bold green" if is_me else "dim")
+            parts: list[str] = []
+            for i, pos in enumerate(pos_list):
+                if pos == _STABLE:
+                    parts.append(f"H{i}:stable")
+                elif pos == self._done:
+                    parts.append(f"H{i}:done")
+                elif pos >= self.track_size:
+                    parts.append(f"H{i}:home[{pos - self.track_size}]")
+                else:
+                    parts.append(f"H{i}:{pos}")
+            t.append("  ".join(parts))
+            t.append("\n")
+        t.append("\nDice: ", style="dim")
+        t.append(str(d["dice"]), style="bold yellow")
+        return t
+
+    def get_action_display(self, action: Action) -> str:
+        piece = action.data["piece"]
+        return "Pass (no move possible)" if piece < 0 else f"Move horse {piece}"

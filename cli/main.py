@@ -346,12 +346,22 @@ def _play_against_agent(adapter: BaseAdapter, game_name: str) -> None:
         Prompt.ask("Votre siège (joueur)", choices=seat_choices, default="0")
     )
 
+    ui_mode = _prompt_ui_mode()
+
+    if ui_mode == "textual":
+        _play_textual(adapter, agent, human_seat)
+        return
+
     play_again = True
     while play_again:
         agents = []
         for pid in range(n_players):
             if pid == human_seat:
-                agents.append(HumanAgent())
+                if ui_mode == "rich":
+                    from ui.rich_agent import RichHumanAgent
+                    agents.append(RichHumanAgent(adapter))
+                else:
+                    agents.append(HumanAgent())
             else:
                 agents.append(copy.deepcopy(agent))
 
@@ -377,6 +387,46 @@ def _play_against_agent(adapter: BaseAdapter, game_name: str) -> None:
         console.print(f"[dim]{result.n_turns} tours joués[/dim]")
 
         play_again = Confirm.ask("Rejouer ?", default=True)
+
+
+def _prompt_ui_mode() -> str:
+    """Show a UI-mode selection prompt when a human player joins a game."""
+    console.print("\n[bold]Comment souhaitez-vous jouer ?[/bold]")
+    console.print(
+        "  [cyan][1][/cyan] Textual TUI  — interface graphique, support souris "
+        "[bold](défaut)[/bold]"
+    )
+    console.print("  [cyan][2][/cyan] Rich terminal — terminal coloré, accessible")
+    console.print("  [cyan][3][/cyan] CLI classique — texte brut")
+    while True:
+        raw = input("Votre choix [1-3, Entrée = 1]: ").strip()
+        if raw in ("", "1"):
+            return "textual"
+        if raw == "2":
+            return "rich"
+        if raw == "3":
+            return "cli"
+        console.print("[red]Entrez 1, 2 ou 3.[/red]")
+
+
+def _play_textual(adapter: BaseAdapter, bot_agent: Any, human_seat: int) -> None:
+    try:
+        from ui.textual_agent import TextualHumanAgent
+        from ui.textual_app import ShakTUIApp
+    except ImportError:
+        console.print(
+            "[red]Textual n'est pas installé.[/red]  "
+            "Lancez : [bold]pip install textual[/bold]"
+        )
+        return
+    human_agent = TextualHumanAgent()
+    app = ShakTUIApp(
+        adapter=adapter,
+        agent=human_agent,
+        bot_agent=bot_agent,
+        human_seat=human_seat,
+    )
+    app.run()
 
 
 # -------------------------------------------------------------------- optimization

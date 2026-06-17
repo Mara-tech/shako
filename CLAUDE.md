@@ -32,6 +32,10 @@ Python env: `pip install -e .` from root. PYTHONPATH = project root.
 | `llm/adapter_generator.py` | description → `games/<name>/adapter.py` via Claude API |
 | `llm/eval_generator.py` | criteria → `games/<name>/eval.py` via Claude API |
 | `cli/main.py` | interactive game selection and simulation |
+| `ui/rich_agent.py` | `RichHumanAgent` — Rich-styled human player (coloured board, styled actions) |
+| `ui/textual_agent.py` | `TextualHumanAgent` — bridge between engine thread and Textual event loop |
+| `ui/textual_app.py` | `ShakTUIApp` — Textual TUI application (board panel, action list, replay) |
+| `ui/grid_widget.py` | `GridWidget` — clickable NxM grid widget (column mode for Connect Four, cell mode for Tic-Tac-Toe) |
 
 ## Adding a new game
 
