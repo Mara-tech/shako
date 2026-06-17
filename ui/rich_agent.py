@@ -44,14 +44,15 @@ class RichHumanAgent(BaseAgent):
         else:
             self._console.print(f"[dim]State:[/dim] {observable_state.data}")
 
+        offset = self._adapter.get_action_index_offset()
         self._console.print("\n[bold]Legal actions:[/bold]")
         for i, action in enumerate(legal_actions):
             display = _action_display(self._adapter, action)
-            self._console.print(f"  [[cyan]{i:>3}[/cyan]] {display}")
+            self._console.print(f"  [[cyan]{i + offset:>3}[/cyan]] {display}")
 
-        max_idx = len(legal_actions) - 1
+        lo, hi = offset, len(legal_actions) - 1 + offset
         while True:
-            raw = input(f"Your move [0-{max_idx}]: ").strip()
+            raw = input(f"Your move [{lo}-{hi}]: ").strip()
             if not raw:
                 continue
             try:
@@ -59,10 +60,10 @@ class RichHumanAgent(BaseAgent):
             except ValueError:
                 self._console.print(f"[red]Not a number: {raw!r}[/red]")
                 continue
-            if not 0 <= idx <= max_idx:
-                self._console.print(f"[red]Pick 0 to {max_idx}.[/red]")
+            if not lo <= idx <= hi:
+                self._console.print(f"[red]Pick {lo} to {hi}.[/red]")
                 continue
-            return legal_actions[idx]
+            return legal_actions[idx - offset]
 
 
 def _action_display(adapter: BaseAdapter, action: Action) -> str:

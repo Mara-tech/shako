@@ -80,6 +80,15 @@ class BaseAdapter(ABC):
         """
         return None
 
+    def get_action_index_offset(self) -> int:
+        """Starting index shown to the human player when listing legal actions.
+
+        Return 1 when action semantics are 1-based (e.g. "take 1–3 sticks"),
+        so the displayed numbers match the game vocabulary. Return 0 (default)
+        for 0-based games or when the index has no natural meaning.
+        """
+        return 0
+
     def get_action_label(self, action: Action) -> str:
         """Coarse label for `action`, used by the analyzer for frequency analysis.
 

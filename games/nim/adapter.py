@@ -89,6 +89,9 @@ class NimAdapter(BaseAdapter):
         t.append(f"\n\nMax take: {self.max_take}", style="dim")
         return t
 
+    def get_action_index_offset(self) -> int:
+        return 1
+
     def get_action_display(self, action: Action) -> str:
         n = action.data["take"]
         return f"Take {n} stick{'s' if n != 1 else ''}"

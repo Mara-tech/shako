@@ -127,11 +127,12 @@ class ShakTUIApp(App):
                 renderable if renderable is not None else str(obs_state.data)
             )
 
+        offset = self._adapter.get_action_index_offset()
         actions_widget = self.query_one("#actions", ListView)
         actions_widget.clear()
         for i, action in enumerate(legal_actions):
             actions_widget.append(
-                ListItem(Label(f"[{i:>2}] {_action_display(self._adapter, action)}"))
+                ListItem(Label(f"[{i + offset:>2}] {_action_display(self._adapter, action)}"))
             )
 
         self.query_one("#status", Static).update(
