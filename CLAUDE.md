@@ -60,7 +60,6 @@ the analyzer, and the optimizer without modification.
 - Project language is English. The only exception can be the name of some games that may not exist in English, so it would be considered as a proper noun in the provided language. Moreover, if a game name is provided in another language than English and is well-known enough to have an English name, use it (e.g. when you are prompted to implement "Morpion" (FR), consider you have to implement "TicTacToe").
 - **Never modify `BaseAdapter`'s interface** (the 9 abstract method signatures) without discussing it first — it is the single integration point; everything else depends on it.
 - **Run `pytest tests/` before marking a task done.** If tests fail, fix them before concluding.
-- **`python -m mypy . && python -m ruff check .` must pass before pushing.** Access optional adapter methods via `getattr` (never direct attribute access on `BaseAdapter`); annotate any variable whose type mypy cannot infer.
 - **Pick the right reference implementation** for a new game: `nim/` by default, `cards/` for hidden information, `tictactoe/` for multi-round or configurable starting player.
 - **Create a `rules.md`** in English in the game's folder when adding a new game. Describe the rules in plain language: players, actions, win/draw/loss conditions, edge cases.
 - **Create a test** when adding a new game in `tests/` folder.
