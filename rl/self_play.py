@@ -127,8 +127,15 @@ class SelfPlayTrainer:
         )
         self.history: list[dict[str, Any]] = []
 
-    def train(self) -> tuple[MCTSAgent, list[dict[str, Any]]]:
-        """Run the full self-play schedule. Returns the best agent + per-iteration metrics."""
+    def train(
+        self,
+        on_iteration_end: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> tuple[MCTSAgent, list[dict[str, Any]]]:
+        """Run the full self-play schedule. Returns the best agent + per-iteration metrics.
+
+        `on_iteration_end(metrics)` is called after each iteration with that iteration's
+        metrics dict. Return `False` to stop training early, `True` to continue.
+        """
         for it in range(self.n_iterations):
             _on_sp = (lambda d, t: self._progress_line(it, "self-play", d, t)) if self.verbose else None
             trajectories = self._self_play(self.current_agent, self.n_games_per_iter, _on_game=_on_sp)
@@ -164,6 +171,8 @@ class SelfPlayTrainer:
                     f"  policy={metrics['policy_unique_states']:>5} states"
                     f"  WR={win_rate:>6.2%}  {status}"
                 )
+            if on_iteration_end is not None and not on_iteration_end(metrics):
+                break
 
         return self.current_agent, self.history
 

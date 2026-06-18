@@ -24,6 +24,7 @@ authors = [
 [project.optional-dependencies]
 dev = ["pytest", "mypy", "ruff"]
 tui = ["textual>=0.50"]
+monitor = ["jordan-py"]
 
 [tool.setuptools.packages.find]
 where = ["."]
