@@ -15,7 +15,7 @@ import sys
 import types
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Callable, Union, get_args, get_origin
 
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
@@ -50,15 +50,21 @@ def _parse_bool(val: str) -> bool:
     return val.lower() not in ("false", "0", "no", "")
 
 
-def _annotation_to_argtype(annotation: Any) -> type:
+def _annotation_to_argtype(annotation: Any) -> Callable[[str], Any]:
     """Map a type annotation (string or type object) to an argparse type callable."""
+    _str_map: dict[str, Callable[[str], Any]] = {
+        "int": int, "float": float, "bool": _parse_bool, "str": str,
+    }
+    _type_map: dict[Any, Callable[[str], Any]] = {
+        int: int, float: float, bool: _parse_bool, str: str,
+    }
     if annotation is inspect.Parameter.empty:
         return str
     if isinstance(annotation, str):
         bare = annotation.strip()
         bare = re.sub(r"^Optional\[(.+)]$", r"\1", bare).strip()
         bare = re.sub(r"\s*\|\s*None\b|\bNone\s*\|\s*", "", bare).strip()
-        return {"int": int, "float": float, "bool": _parse_bool, "str": str}.get(bare, str)
+        return _str_map.get(bare, str)
     origin = get_origin(annotation)
     args = get_args(annotation)
     if origin is Union or (
@@ -67,12 +73,12 @@ def _annotation_to_argtype(annotation: Any) -> type:
         non_none = [a for a in args if a is not type(None)]
         if len(non_none) == 1:
             annotation = non_none[0]
-    return {int: int, float: float, bool: _parse_bool, str: str}.get(annotation, str)
+    return _type_map.get(annotation, str)
 
 
 def _add_adapter_args(parser: argparse.ArgumentParser, adapter_class: type) -> list[str]:
     """Add adapter __init__ params as --adapter-<name> CLI args; return param names."""
-    sig = inspect.signature(adapter_class.__init__)
+    sig = inspect.signature(adapter_class)
     names: list[str] = []
     for name, param in sig.parameters.items():
         if name == "self":
