@@ -71,7 +71,7 @@ and then pass its URL to the script:
 
 ```bash
 python scripts/train.py --game nim --n-iterations 30 --seed 0 \
-    --jordan-server-url http://localhost:5000/jordan
+    --jordan-server-url http://localhost:5000/jordan/
 ```
 
 ### What gets reported
