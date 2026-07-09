@@ -30,7 +30,6 @@ monitor = ["jordan-py"]
 where = ["."]
 
 [tool.mypy]
-python_version = "3.11"
 ignore_missing_imports = true
 disable_error_code = ["arg-type", "type-arg"]
 
