@@ -60,21 +60,17 @@ For non-interactive self-play training (e.g. CI or overnight runs), use
 
 ```bash
 python scripts/train.py --game nim --n-iterations 20 --seed 42
+python scripts/train.py --game connect4 --adapter-rows 6 --adapter-cols 7 --n-iterations 30
 ```
 
-| Flag | Default | Description |
-|---|---|---|
-| `--game` | *(required)* | Game folder name under `games/` |
-| `--n-iterations` | `10` | Number of train/eval cycles |
-| `--n-games-per-iter` | `50` | Self-play games per training iteration |
-| `--eval-games` | `40` | Evaluation games used to decide promotion |
-| `--mcts-simulations` | `100` | MCTS simulations per move |
-| `--promotion-threshold` | `0.55` | Win-rate required to promote the candidate |
-| `--seed` | *(random)* | RNG seed for reproducibility |
+The script accepts adapter constructor parameters as `--adapter-<name>` flags
+and saves the trained agent to `games/<name>/models/selfplay/<params>/<timestamp>.pkl`.
+It also supports remote monitoring via a [Jordan](https://pypi.org/project/jordan-py/)
+server (`--jordan-server-url`), which gives a live progress view and lets you
+stop a run early remotely.
 
-On completion the script saves the trained agent to
-`games/<name>/models/selfplay/<timestamp>.pkl` and prints how many iterations
-promoted the candidate model.
+See [scripts/README.md](scripts/README.md) for the full flag reference and
+Jordan setup instructions.
 
 ## Describing a new game
 

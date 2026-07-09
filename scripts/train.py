@@ -112,6 +112,12 @@ def main() -> None:
     parser.add_argument("--mcts-simulations", type=int, default=100)
     parser.add_argument("--promotion-threshold", type=float, default=0.55)
     parser.add_argument("--seed", type=int, default=None, help="RNG seed (omit for random)")
+    parser.add_argument(
+        "--jordan-server-url",
+        default=None,
+        metavar="URL",
+        help="Jordan server URL for remote monitoring (optional; pip install jordan-py). e.g http://localhost:5000/jordan/",
+    )
 
     adapter_param_names = _add_adapter_args(parser, adapter_class)
     args = parser.parse_args()
@@ -129,6 +135,29 @@ def main() -> None:
             f"{adapter_class.__name__} requires constructor arguments: {exc}\n"
             "Pass them with --adapter-<param-name> <value>."
         ) from exc
+
+    jordan_client = None
+    if args.jordan_server_url:
+        if not args.jordan_server_url.endswith("/"):
+            args.jordan_server_url += "/"
+        try:
+            from jordan_py import jordan as _jordan_lib
+            _actions = _jordan_lib.with_action("break_training_loop").build()
+            jordan_client = _jordan_lib.register(
+                args.jordan_server_url,
+                client_name=f"shako-{args.game}",
+                actions=_actions,
+            )
+            if jordan_client is not None:
+                jordan_client.send_status(
+                    f"Training {args.game} — "
+                    f"{args.n_iterations} iter × {args.n_games_per_iter} games, "
+                    f"{args.mcts_simulations} MCTS sims, seed={args.seed}"
+                )
+            else:
+                print(f"Jordan registration failed at {args.jordan_server_url} — monitoring disabled.")
+        except ImportError:
+            print("jordan-py not installed — monitoring disabled. pip install jordan-py")
 
     from rl.self_play import SelfPlayTrainer
 
@@ -148,7 +177,25 @@ def main() -> None:
         f"{args.n_iterations} iter × {args.n_games_per_iter} games, "
         f"{args.mcts_simulations} MCTS sims, seed={args.seed}"
     )
-    _, history = trainer.train()
+
+    def _on_iteration(metrics: dict) -> bool:
+        if jordan_client is None:
+            return True
+        it, n = metrics["iteration"] + 1, args.n_iterations
+        jordan_client.send_progress(int(it / n * 100))
+        status = "promoted" if metrics["promoted"] else "rejected"
+        jordan_client.send_status(
+            f"Iter {it}/{n}  WR={metrics['candidate_win_rate']:.2%}  {status}"
+        )
+        msg = jordan_client.read_message()
+        if msg is not None and msg.action_name == "break_training_loop":
+            msg.acknowledge()
+            msg.processed()
+            jordan_client.send_status(f"Stopping early at iteration {it}/{n}")
+            return False
+        return True
+
+    _, history = trainer.train(on_iteration_end=_on_iteration)
 
     promotions = sum(1 for h in history if h["promoted"])
     print(f"\nDone. {promotions}/{args.n_iterations} iterations promoted the candidate.")
@@ -162,8 +209,17 @@ def main() -> None:
         trainer.save_agent(tmp)
         tmp.replace(out_path)
         print(f"Agent saved: {out_path.relative_to(_ROOT)}")
+        if jordan_client is not None:
+            jordan_client.send_success_status(
+                f"Done. {promotions}/{len(history)} promoted. "
+                f"Agent: {out_path.relative_to(_ROOT)}"
+            )
+            jordan_client.unregister()
     except Exception as exc:
         tmp.unlink(missing_ok=True)
+        if jordan_client is not None:
+            jordan_client.send_failure_status(str(exc))
+            jordan_client.unregister()
         raise SystemExit(f"Save failed: {exc}") from exc
 
 

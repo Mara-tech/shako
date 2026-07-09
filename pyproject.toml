@@ -24,12 +24,12 @@ authors = [
 [project.optional-dependencies]
 dev = ["pytest", "mypy", "ruff"]
 tui = ["textual>=0.50"]
+monitor = ["jordan-py"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 
 [tool.mypy]
-python_version = "3.11"
 ignore_missing_imports = true
 disable_error_code = ["arg-type", "type-arg"]
 

@@ -5,6 +5,7 @@ rich>=13.0             # cli/ — interactive interface
 
 # Optional (lazy-imported, only needed if you call them)
 matplotlib             # balancer.optimizer.plot_optimization_history
+jordan-py              # scripts/train.py --jordan-server-url — remote monitoring
 
 # Dev / test
 pytest>=7.0

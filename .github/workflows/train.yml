@@ -35,6 +35,10 @@ on:
         description: "RNG seed (leave empty for random)"
         type: string
         default: "0"
+      jordan_server_url:
+        description: "Jordan server URL for remote monitoring (optional)"
+        type: string
+        default: ""
 
 jobs:
   train:
@@ -51,7 +55,9 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e .
+        run: |
+          pip install -e .
+          if [ -n "${{ inputs.jordan_server_url }}" ]; then pip install -e ".[monitor]"; fi
 
       - name: Run training
         run: |
@@ -61,7 +67,8 @@ jobs:
             --n-games-per-iter "${{ inputs.n_games_per_iter }}" \
             --eval-games "${{ inputs.eval_games }}" \
             --mcts-simulations "${{ inputs.mcts_simulations }}" \
-            ${{ inputs.seed != '' && format('--seed {0}', inputs.seed) || '' }}
+            ${{ inputs.seed != '' && format('--seed {0}', inputs.seed) || '' }} \
+            ${{ inputs.jordan_server_url != '' && format('--jordan-server-url {0}', inputs.jordan_server_url) || '' }}
 
       - name: Commit model
         run: |
