@@ -138,6 +138,8 @@ def main() -> None:
 
     jordan_client = None
     if args.jordan_server_url:
+        if not args.jordan_server_url.endswith("/"):
+            args.jordan_server_url += "/"
         try:
             from jordan_py import jordan as _jordan_lib
             _actions = _jordan_lib.with_action("break_training_loop").build()
