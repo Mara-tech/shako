@@ -78,6 +78,14 @@ class SimulationEngine:
         illegal_counts: dict[int, int] = {pid: 0 for pid in range(n_players)}
         timed_out = False
 
+        # Agents that don't override `on_state_update` (the common case in
+        # bulk self-play) are skipped entirely so the hook costs nothing there.
+        observers = [
+            (pid, agent)
+            for pid, agent in enumerate(self.agents)
+            if type(agent).on_state_update is not BaseAgent.on_state_update
+        ]
+
         executor: ThreadPoolExecutor | None = (
             ThreadPoolExecutor(max_workers=1) if self.max_action_ms is not None else None
         )
@@ -109,6 +117,9 @@ class SimulationEngine:
 
                 state = self.adapter.apply_action(state, action, pid)
                 n_turns += 1
+
+                for obs_pid, obs_agent in observers:
+                    obs_agent.on_state_update(self.adapter.get_observable_state(state, obs_pid))
         finally:
             if executor is not None:
                 executor.shutdown(wait=False)

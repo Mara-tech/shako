@@ -43,3 +43,14 @@ class BaseAgent(ABC):
         Args:
             scores: Mapping from player_id to final score for every player.
         """
+
+    def on_state_update(self, observable_state: ObservableState) -> None:
+        """Optional hook called after every applied action, whoever's turn it was.
+
+        Unlike `choose_action`, this fires even on turns this agent isn't
+        acting on — including the terminal one. Override for agents backing a
+        live display (e.g. a UI) that must stay in sync while another player
+        or a slow bot is thinking. Default is a no-op; the engine skips the
+        (state, hook) bookkeeping entirely for agents that don't override it.
+        """
+        return None

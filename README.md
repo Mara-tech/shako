@@ -98,7 +98,7 @@ every abstract method. [`games/nim/adapter.py`](games/nim/adapter.py) is the
 canonical reference; [`games/cards/adapter.py`](games/cards/adapter.py) shows
 the hidden-information pattern with a `sample_state` method for MCTS
 determinization; [`games/tictactoe/adapter.py`](games/tictactoe/adapter.py)
-shows multi-round scoring with configurable starting-player modes.
+shows the clickable grid-UI hooks (`get_grid_config`, `get_action_for_click`).
 
 ## Architecture
 
@@ -114,7 +114,7 @@ shako/
 ├── games/       Concrete adapters
 │   ├── nim/                perfect-information reference
 │   ├── cards/              hidden-information reference (with sample_state)
-│   └── tictactoe/          multi-round scoring, configurable starting player
+│   └── tictactoe/          grid-based UI reference
 │
 ├── rl/          Agents
 │   ├── random_agent.py     baseline / fallback

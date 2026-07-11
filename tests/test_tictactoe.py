@@ -13,18 +13,15 @@ from rl.random_agent import RandomAgent
 def _state(
     board: list[int],
     current: int = 0,
-    round_: int = 0,
-    round_starter: int = 0,
     scores: dict | None = None,
+    game_over: bool = False,
 ) -> State:
     return State(
         data={
             "board": list(board),
             "current": current,
-            "round": round_,
-            "round_starter": round_starter,
-            "scores": scores if scores is not None else {0: 0, 1: 0},
-            "game_over": False,
+            "scores": scores if scores is not None else {0: 0.0, 1: 0.0},
+            "game_over": game_over,
         }
     )
 
@@ -128,120 +125,51 @@ def test_apply_action_does_not_mutate_source_state() -> None:
 
 # ------------------------------------------------------------------ win detection
 
-def test_win_increments_score_and_starts_new_round() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=5)
+def test_win_sets_score_and_ends_game() -> None:
+    adapter = TicTacToeAdapter()
     # Player 0 has 0,1 and will complete top row with pos 2
     board = [1, 1, 0, 2, 2, 0, 0, 0, 0]
-    state = _state(board, current=0, round_=0)
+    state = _state(board, current=0)
     new = adapter.apply_action(state, _act(2), player_id=0)
-    assert new.data["scores"][0] == 1
-    assert new.data["scores"][1] == 0
-    assert new.data["board"] == [0] * 9  # reset
-    assert new.data["round"] == 1
-    assert not new.data["game_over"]
-
-
-def test_win_on_last_round_ends_game() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=3)
-    board = [1, 1, 0, 2, 2, 0, 0, 0, 0]
-    state = _state(board, current=0, round_=2)  # already at last round
-    new = adapter.apply_action(state, _act(2), player_id=0)
+    assert new.data["scores"][0] == 1.0
+    assert new.data["scores"][1] == 0.0
     assert new.data["game_over"]
 
 
-def test_player1_win_increments_correct_score() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=5)
+def test_player1_win_sets_correct_score() -> None:
+    adapter = TicTacToeAdapter()
     board = [1, 0, 0, 2, 2, 0, 0, 0, 0]
     # Player 1 completes middle row with pos 5
-    state = _state(board, current=1, round_=0)
+    state = _state(board, current=1)
     new = adapter.apply_action(state, _act(5), player_id=1)
-    assert new.data["scores"][1] == 1
-    assert new.data["scores"][0] == 0
+    assert new.data["scores"][1] == 1.0
+    assert new.data["scores"][0] == 0.0
+    assert new.data["game_over"]
 
 
 # ------------------------------------------------------------------ draw detection
 
-def test_draw_starts_new_round_half_point_each() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=5)
+def test_draw_gives_half_point_each_and_ends_game() -> None:
+    adapter = TicTacToeAdapter()
     # One cell left, no winner possible
     board = [1, 2, 1, 1, 2, 1, 2, 1, 0]
-    state = _state(board, current=1, round_=0)
+    state = _state(board, current=1)
     new = adapter.apply_action(state, _act(8), player_id=1)
     assert new.data["scores"] == {0: 0.5, 1: 0.5}
-    assert new.data["board"] == [0] * 9
-    assert new.data["round"] == 1
-    assert not new.data["game_over"]
-
-
-def test_draw_on_last_round_ends_game() -> None:
-    adapter = TicTacToeAdapter(max_rounds=1)
-    board = [1, 2, 1, 1, 2, 1, 2, 1, 0]
-    state = _state(board, current=1, round_=0)
-    new = adapter.apply_action(state, _act(8), player_id=1)
     assert new.data["game_over"]
 
 
-# ------------------------------------------------------------------ starting_player modes
+# ------------------------------------------------------------------ termination
 
-def test_starting_player_constant_always_0() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=6, seed=0)
-    state = adapter.get_initial_state()
-    assert state.data["round_starter"] == 0
-
-    # Simulate several round endings and verify the starter never changes
-    for _ in range(4):
-        board = [1, 1, 0, 2, 2, 0, 0, 0, 0]
-        state = State(data={**state.data, "board": list(board), "current": 0})
-        state = adapter.apply_action(state, _act(2), player_id=0)
-        assert state.data["round_starter"] == 0
-
-
-def test_starting_player_alternate_flips() -> None:
-    adapter = TicTacToeAdapter(starting_player="alternate", max_rounds=6, seed=0)
-    state = adapter.get_initial_state()
-    assert state.data["round_starter"] == 0
-
-    starters = [0]
-    for _ in range(4):
-        board = [1, 1, 0, 2, 2, 0, 0, 0, 0]
-        state = State(data={**state.data, "board": list(board), "current": 0})
-        state = adapter.apply_action(state, _act(2), player_id=0)
-        starters.append(state.data["round_starter"])
-
-    assert starters == [0, 1, 0, 1, 0]
-
-
-def test_starting_player_random_deterministic_with_seed() -> None:
-    a1 = TicTacToeAdapter(starting_player="random", max_rounds=10, seed=7)
-    a2 = TicTacToeAdapter(starting_player="random", max_rounds=10, seed=7)
-    s1 = a1.get_initial_state()
-    s2 = a2.get_initial_state()
-    assert s1.data["round_starter"] == s2.data["round_starter"]
-
-
-# ------------------------------------------------------------------ max_rounds
-
-def test_game_not_over_before_max_rounds() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=3)
-    # Win round 0
-    board = [1, 1, 0, 2, 2, 0, 0, 0, 0]
-    state = _state(board, current=0, round_=0)
-    state = adapter.apply_action(state, _act(2), player_id=0)
-    assert state.data["round"] == 1
-    assert not state.data["game_over"]
-
-
-def test_game_over_at_max_rounds() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=1)
-    assert adapter.max_rounds == 1
-    board = [1, 1, 0, 2, 2, 0, 0, 0, 0]
-    state = _state(board, current=0, round_=0)
-    state = adapter.apply_action(state, _act(2), player_id=0)
-    assert state.data["game_over"]
+def test_get_initial_state_player0_starts() -> None:
+    adapter = TicTacToeAdapter()
+    for _ in range(5):
+        state = adapter.get_initial_state()
+        assert state.data["current"] == 0
 
 
 def test_is_terminal_matches_game_over() -> None:
-    adapter = TicTacToeAdapter(max_rounds=1)
+    adapter = TicTacToeAdapter()
     state = adapter.get_initial_state()
     assert not adapter.is_terminal(state)
     # Force game over
@@ -249,21 +177,11 @@ def test_is_terminal_matches_game_over() -> None:
     assert adapter.is_terminal(state)
 
 
-# ------------------------------------------------------------------ scores
-
-def test_scores_accumulate_across_rounds() -> None:
-    adapter = TicTacToeAdapter(starting_player="constant", max_rounds=5)
-    board = [1, 1, 0, 2, 2, 0, 0, 0, 0]
-    state = _state(board, current=0, round_=0, scores={0: 2, 1: 1})
-    state = adapter.apply_action(state, _act(2), player_id=0)
-    assert state.data["scores"] == {0: 3, 1: 1}
-
-
 def test_get_scores_returns_floats() -> None:
     adapter = TicTacToeAdapter()
-    state = _state([0] * 9, scores={0: 3, 1: 1})
+    state = _state([0] * 9, scores={0: 1.0, 1: 0.0})
     scores = adapter.get_scores(state)
-    assert scores == {0: 3.0, 1: 1.0}
+    assert scores == {0: 1.0, 1: 0.0}
     assert all(isinstance(v, float) for v in scores.values())
 
 
@@ -274,7 +192,7 @@ def test_observable_state_contains_all_fields() -> None:
     state = _state([1, 0, 2, 0, 0, 0, 0, 0, 0], current=0)
     obs = adapter.get_observable_state(state, player_id=0)
     assert obs.player_id == 0
-    for key in ("board", "current", "round", "round_starter", "scores", "game_over"):
+    for key in ("board", "current", "scores", "game_over"):
         assert key in obs.data
 
 
@@ -291,15 +209,15 @@ def test_clone_state_is_independent() -> None:
     state = _state([1, 0, 0, 0, 2, 0, 0, 0, 0])
     clone = adapter.clone_state(state)
     clone.data["board"][1] = 99
-    clone.data["scores"][0] = 42
+    clone.data["scores"][0] = 42.0
     assert state.data["board"][1] == 0
-    assert state.data["scores"][0] == 0
+    assert state.data["scores"][0] == 0.0
 
 
 # ------------------------------------------------------------------ integration
 
 def test_random_agents_game_terminates() -> None:
-    adapter = TicTacToeAdapter(starting_player="alternate", max_rounds=9, seed=0)
+    adapter = TicTacToeAdapter()
     agents = [RandomAgent(seed=i) for i in range(2)]
     engine = SimulationEngine(adapter, agents)
     results = [engine.run_game() for _ in range(30)]
@@ -308,49 +226,10 @@ def test_random_agents_game_terminates() -> None:
 
 
 def test_random_agents_scores_consistent() -> None:
-    """Scores in GameResult must equal the adapter's final get_scores output."""
-    adapter = TicTacToeAdapter(max_rounds=5, seed=1)
+    """A finished game always distributes exactly 1 point in total (win=1+0, draw=0.5+0.5)."""
+    adapter = TicTacToeAdapter()
     agents = [RandomAgent(seed=0), RandomAgent(seed=1)]
     engine = SimulationEngine(adapter, agents)
     for _ in range(20):
         result = engine.run_game()
-        total = sum(result.scores.values())
-        # Total wins <= max_rounds
-        assert total <= adapter.max_rounds
-
-
-@pytest.mark.parametrize("mode", ["random", "alternate", "constant"])
-def test_starting_player_modes_complete_without_error(mode: str) -> None:
-    adapter = TicTacToeAdapter(starting_player=mode, max_rounds=5, seed=42)
-    agents = [RandomAgent(seed=0), RandomAgent(seed=1)]
-    engine = SimulationEngine(adapter, agents)
-    results = [engine.run_game() for _ in range(10)]
-    assert len(results) == 10
-
-
-def test_alternate_starters_integration() -> None:
-    """In alternate mode, round_starter must flip after every real round of actual play."""
-    adapter = TicTacToeAdapter(starting_player="alternate", max_rounds=6, seed=0)
-    agents = [RandomAgent(seed=0), RandomAgent(seed=1)]
-
-    state = adapter.get_initial_state()
-    starters: list[int] = [state.data["round_starter"]]
-    prev_round: int = state.data["round"]
-
-    while not adapter.is_terminal(state):
-        pid = adapter.get_current_player(state)
-        obs = adapter.get_observable_state(state, pid)
-        actions = adapter.get_legal_actions(state, pid)
-        action = agents[pid].choose_action(obs, actions)
-        state = adapter.apply_action(state, action, pid)
-
-        cur_round = state.data["round"]
-        if cur_round != prev_round and not state.data["game_over"]:
-            starters.append(state.data["round_starter"])
-            prev_round = cur_round
-
-    assert len(starters) >= 2, "Expected at least 2 rounds to check alternation"
-    for i in range(len(starters) - 1):
-        assert starters[i + 1] == 1 - starters[i], (
-            f"Round {i + 1} starter should be {1 - starters[i]}, got {starters[i + 1]}"
-        )
+        assert sum(result.scores.values()) == 1.0

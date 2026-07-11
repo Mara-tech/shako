@@ -711,6 +711,10 @@ def _instantiate_with_params(
     for name, param in sig.parameters.items():
         if name == "self":
             continue
+        # Adapters with no custom __init__ resolve to object.__init__, whose
+        # signature is (self, *args, **kwargs) — not real parameters to prompt for.
+        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            continue
         # param.annotation is a string when `from __future__ import annotations`
         # is active in the adapter module, or a type object otherwise.
         annotation = param.annotation

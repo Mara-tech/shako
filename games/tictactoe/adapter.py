@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import random
-from typing import Literal
-
 from core.base_adapter import BaseAdapter
 from core.types import Action, ObservableState, State
 
@@ -23,52 +20,40 @@ def _winner(board: list[int]) -> int | None:
 
 
 class TicTacToeAdapter(BaseAdapter):
-    """Multi-round Tic Tac Toe on a 3×3 grid.
+    """Single-episode Tic Tac Toe on a 3×3 grid.
 
-    Each round is an independent game; the session ends after `max_rounds`.
-    The `starting_player` parameter controls who opens each round:
-        "random"    — drawn uniformly at the start of each round.
-        "alternate" — player 0 starts round 0, player 1 starts round 1, etc.
-        "constant"  — player 0 always starts.
+    Playing several games in a row (a "match"), tallying the outcomes, and
+    detecting seat advantage are concerns of the caller (the CLI's replay
+    loop, `SelfPlayTrainer`, `DominanceAnalyzer`, ...), not of the adapter —
+    every one of them already aggregates independent `GameResult`s. Baking a
+    multi-round session into the adapter's own state would instead dilute the
+    per-move reward signal MCTS relies on (a move's value would depend on many
+    future, unrelated rounds) and would hide seat-advantage from analysis
+    tools that only see one aggregated result per session.
+
+    Player 0 always moves first, same convention as every other adapter in the
+    framework (`nim`, `cards`, `connect4`). Deciding who effectively "goes
+    first" against a given opponent is a seat-assignment concern of the
+    caller (e.g. the CLI's seat prompt, `SelfPlayTrainer`'s alternating
+    seats in `_evaluate`) — not something the adapter needs to parameterize.
 
     Board cells are indexed 0–8 (row-major). Cell values: 0 = empty,
     1 = player 0's mark, 2 = player 1's mark.
 
     State schema:
-        board         : list[int]        — 9 cells
-        current       : int              — player to move
-        round         : int              — current round index (0-based)
-        round_starter : int              — player who opened the current round
-        scores        : {0: float, 1: float} — cumulative match points
-                         (win = +1, draw = +0.5 each)
-        game_over     : bool
+        board     : list[int]            — 9 cells
+        current   : int                  — player to move
+        scores    : {0: float, 1: float} — this game's outcome
+                     (win = 1.0 / 0.0, draw = 0.5 / 0.5, in progress = 0.0 / 0.0)
+        game_over : bool
     """
 
-    def __init__(
-        self,
-        starting_player: Literal["random", "alternate", "constant"] = "alternate",
-        max_rounds: int = 9,
-        seed: int | None = None,
-    ) -> None:
-        if starting_player not in ("random", "alternate", "constant"):
-            raise ValueError("starting_player must be 'random', 'alternate', or 'constant'")
-        if max_rounds < 1:
-            raise ValueError("max_rounds must be >= 1")
-        self.starting_player = starting_player
-        self.max_rounds = max_rounds
-        self._rng = random.Random(seed)
-
-    # ------------------------------------------------------------------ lifecycle
-
     def get_initial_state(self) -> State:
-        starter = self._pick_starter(prev_starter=0, is_first=True)
         return State(
             data={
                 "board": [0] * 9,
-                "current": starter,
-                "round": 0,
-                "round_starter": starter,
-                "scores": {0: 0, 1: 0},
+                "current": 0,
+                "scores": {0: 0.0, 1: 0.0},
                 "game_over": False,
             }
         )
@@ -104,36 +89,19 @@ class TicTacToeAdapter(BaseAdapter):
 
         w = _winner(d["board"])
         if w is not None:
-            d["scores"][w] += 1
-            self._end_round(d)
+            d["scores"][w] = 1.0
+            d["game_over"] = True
         elif all(cell != 0 for cell in d["board"]):
             # Match-point scoring: a draw is worth half a win to each player,
-            # so MCTS backprop can tell "secured a draw" apart from "lost the
-            # round" (both left the mover's own score unchanged otherwise).
-            d["scores"][0] += 0.5
-            d["scores"][1] += 0.5
-            self._end_round(d)
+            # so MCTS backprop can tell "secured a draw" apart from "lost"
+            # (both would otherwise leave the mover's own score at 0).
+            d["scores"][0] = 0.5
+            d["scores"][1] = 0.5
+            d["game_over"] = True
         else:
             d["current"] = 1 - player_id
 
         return s
-
-    def _end_round(self, d: dict) -> None:
-        d["round"] += 1
-        if d["round"] >= self.max_rounds:
-            d["game_over"] = True
-            return
-        next_starter = self._pick_starter(prev_starter=d["round_starter"], is_first=False)
-        d["board"] = [0] * 9
-        d["round_starter"] = next_starter
-        d["current"] = next_starter
-
-    def _pick_starter(self, prev_starter: int, is_first: bool) -> int:
-        if self.starting_player == "random":
-            return self._rng.randint(0, 1)
-        if self.starting_player == "alternate":
-            return 0 if is_first else 1 - prev_starter
-        return 0  # constant
 
     # ------------------------------------------------------------------ visibility
 
@@ -143,8 +111,6 @@ class TicTacToeAdapter(BaseAdapter):
             data={
                 "board": list(d["board"]),
                 "current": d["current"],
-                "round": d["round"],
-                "round_starter": d["round_starter"],
                 "scores": dict(d["scores"]),
                 "game_over": d["game_over"],
             },
@@ -166,13 +132,6 @@ class TicTacToeAdapter(BaseAdapter):
                 t.append(syms[val], style=cols[val])
             if r < 2:
                 t.append("\n───┼───┼───\n", style="dim")
-        scores = obs_state.data["scores"]
-        p = obs_state.player_id
-        rnd = obs_state.data["round"]
-        t.append(f"\n\nRound {rnd + 1}  Score: ", style="dim")
-        t.append(str(scores[p]), style="bold green")
-        t.append(" — ", style="dim")
-        t.append(str(scores[1 - p]), style="bold red")
         return t
 
     def get_grid_config(self) -> dict:
@@ -210,9 +169,7 @@ class TicTacToeAdapter(BaseAdapter):
             data={
                 "board": list(d["board"]),
                 "current": d["current"],
-                "round": d["round"],
-                "round_starter": d["round_starter"],
-                "scores": {pid: s for pid, s in d["scores"].items()},
+                "scores": dict(d["scores"]),
                 "game_over": d["game_over"],
             }
         )
