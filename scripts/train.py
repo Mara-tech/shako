@@ -137,6 +137,7 @@ def main() -> None:
         ) from exc
 
     jordan_client = None
+    jordan_training_task = None
     if args.jordan_server_url:
         if not args.jordan_server_url.endswith("/"):
             args.jordan_server_url += "/"
@@ -145,7 +146,7 @@ def main() -> None:
             _actions = _jordan_lib.with_action("break_training_loop").build()
             jordan_client = _jordan_lib.register(
                 args.jordan_server_url,
-                client_name=f"shako-{args.game}",
+                client_name=f"shako-{args.game}-{datetime.now().strftime('%Y%m%d-%H%M')}",
                 actions=_actions,
             )
             if jordan_client is not None:
@@ -154,6 +155,7 @@ def main() -> None:
                     f"{args.n_iterations} iter × {args.n_games_per_iter} games, "
                     f"{args.mcts_simulations} MCTS sims, seed={args.seed}"
                 )
+                jordan_training_task = jordan_client.create_task("Training")
             else:
                 print(f"Jordan registration failed at {args.jordan_server_url} — monitoring disabled.")
         except ImportError:
@@ -179,19 +181,19 @@ def main() -> None:
     )
 
     def _on_iteration(metrics: dict) -> bool:
-        if jordan_client is None:
+        if jordan_training_task is None:
             return True
         it, n = metrics["iteration"] + 1, args.n_iterations
-        jordan_client.send_progress(int(it / n * 100))
+        jordan_training_task.send_progress(int(it / n * 100))
         status = "promoted" if metrics["promoted"] else "rejected"
-        jordan_client.send_status(
+        jordan_training_task.send_status(
             f"Iter {it}/{n}  WR={metrics['candidate_win_rate']:.2%}  {status}"
         )
-        msg = jordan_client.read_message()
+        msg = jordan_training_task.read_message()
         if msg is not None and msg.action_name == "break_training_loop":
             msg.acknowledge()
             msg.processed()
-            jordan_client.send_status(f"Stopping early at iteration {it}/{n}")
+            jordan_training_task.send_status(f"Stopping early at iteration {it}/{n}")
             return False
         return True
 
@@ -210,14 +212,18 @@ def main() -> None:
         tmp.replace(out_path)
         print(f"Agent saved: {out_path.relative_to(_ROOT)}")
         if jordan_client is not None:
-            jordan_client.send_success_status(
-                f"Done. {promotions}/{len(history)} promoted. "
-                f"Agent: {out_path.relative_to(_ROOT)}"
-            )
+            if jordan_training_task is not None:
+                jordan_training_task.send_success_status(
+                    f"Done. {promotions}/{len(history)} promoted. "
+                    f"Agent: {out_path.relative_to(_ROOT)}"
+                )
+                jordan_training_task.complete()
             jordan_client.unregister()
     except Exception as exc:
         tmp.unlink(missing_ok=True)
         if jordan_client is not None:
+            if jordan_training_task is not None:
+                jordan_training_task.fatal(exc)
             jordan_client.send_failure_status(str(exc))
             jordan_client.unregister()
         raise SystemExit(f"Save failed: {exc}") from exc
