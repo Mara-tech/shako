@@ -1,0 +1,1 @@
+Try to defeat the saved selfplay model with 500 simulations

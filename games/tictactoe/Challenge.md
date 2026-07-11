@@ -1,0 +1,1 @@
+Try to defeat an MCTS model with 10000 simulations
