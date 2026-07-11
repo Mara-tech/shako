@@ -110,12 +110,7 @@ class ShakTUIApp(App):
             f"[dim]Game started. You are Player {player_id} of {n_players}.[/dim]"
         )
 
-    def update_state_ui(
-        self, obs_state: ObservableState, legal_actions: list[Action]
-    ) -> None:
-        self._legal_actions = legal_actions
-        self._accepting_input = True
-
+    def _render_board(self, obs_state: ObservableState) -> None:
         if self._grid_config:
             from ui.grid_widget import GridWidget
 
@@ -126,6 +121,23 @@ class ShakTUIApp(App):
             self.query_one("#board", Static).update(
                 renderable if renderable is not None else str(obs_state.data)
             )
+
+    def refresh_board_ui(self, obs_state: ObservableState) -> None:
+        """Repaint the board only, without touching input state or the action list.
+
+        Used for moves this app isn't waiting on input for (the human's own
+        move just after submission, and every bot/opponent move), so the
+        board never lags behind what the engine has already applied.
+        """
+        self._render_board(obs_state)
+
+    def update_state_ui(
+        self, obs_state: ObservableState, legal_actions: list[Action]
+    ) -> None:
+        self._legal_actions = legal_actions
+        self._accepting_input = True
+
+        self._render_board(obs_state)
 
         offset = self._adapter.get_action_index_offset()
         actions_widget = self.query_one("#actions", ListView)

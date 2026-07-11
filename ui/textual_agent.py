@@ -51,3 +51,13 @@ class TextualHumanAgent(BaseAgent):
 
     def post_action(self, action: Action) -> None:
         self._queue.put(action)
+
+    def on_state_update(self, observable_state: ObservableState) -> None:
+        """Keep the board in sync with moves this agent didn't just choose.
+
+        Fires after the human's own move (so it renders before the bot starts
+        thinking) and after every bot move / the terminal state, so the human
+        never has to wait for their own next turn to see what happened.
+        """
+        if self.app is not None:
+            self.app.call_from_thread(self.app.refresh_board_ui, observable_state)
