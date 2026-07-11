@@ -29,6 +29,7 @@ from balancer.analyzer import DominanceAnalyzer
 from balancer.optimizer import BalanceOptimizer
 from core.base_adapter import BaseAdapter
 from core.engine import SimulationEngine
+from core.match_session import MatchSession
 from core.stats import StatsCollector
 from core.types import GameResult
 from rl.greedy_agent import GreedyAgent
@@ -356,41 +357,77 @@ def _play_against_agent(adapter: BaseAdapter, game_name: str) -> None:
         _play_textual(adapter, agent, human_seat)
         return
 
-    play_again = True
-    while play_again:
-        agents = []
+    session = MatchSession(n_players, human_seat)
+    while True:
+        seats = []
         for pid in range(n_players):
             if pid == human_seat:
                 if ui_mode == "rich":
                     from ui.rich_agent import RichHumanAgent
-                    agents.append(RichHumanAgent(adapter))
+                    seats.append(RichHumanAgent(adapter))
                 else:
-                    agents.append(HumanAgent())
+                    seats.append(HumanAgent())
             else:
-                agents.append(copy.deepcopy(agent))
+                seats.append(copy.deepcopy(agent))
 
-        engine = SimulationEngine(adapter, agents, record=False, max_turns=1000)
+        engine = SimulationEngine(adapter, session.rotate(seats), record=False, max_turns=1000)
         result = engine.run_game()
 
-        console.rule("[bold]Résultat de la partie[/bold]")
+        human_pid = session.human_player_id()
+        session.record(result.winner_id)
+
+        console.rule(f"[bold]Résultat de la manche {session.round_number}[/bold]")
         if result.winner_id is None:
             console.print("[yellow]Match nul ![/yellow]")
-        elif result.winner_id == human_seat:
+        elif result.winner_id == human_pid:
             console.print("[bold green]Vous avez gagné ![/bold green]")
         else:
             console.print(f"[bold red]L'agent a gagné (joueur {result.winner_id}).[/bold red]")
 
-        score_table = Table(title="Scores finaux", show_header=True, header_style="bold cyan")
+        score_table = Table(title="Scores de la manche", show_header=True, header_style="bold cyan")
         score_table.add_column("Joueur", justify="center")
         score_table.add_column("Score", justify="right")
         score_table.add_column("Rôle", justify="center")
         for pid, score in result.scores.items():
-            role = "Vous" if pid == human_seat else "Agent"
+            role = "Vous" if pid == human_pid else "Agent"
             score_table.add_row(str(pid), str(score), role)
         console.print(score_table)
         console.print(f"[dim]{result.n_turns} tours joués[/dim]")
 
-        play_again = Confirm.ask("Rejouer ?", default=True)
+        tally = Table(
+            title=f"Score du match — {session.round_number} manche(s) jouée(s)",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        tally.add_column("Siège", justify="center")
+        tally.add_column("Rôle", justify="center")
+        tally.add_column("Victoires", justify="right")
+        for seat in range(n_players):
+            role = "Vous" if seat == human_seat else "Agent"
+            tally.add_row(str(seat), role, str(session.wins[seat]))
+        console.print(tally)
+        console.print(f"[dim]Matchs nuls : {session.draws}[/dim]")
+
+        action = _prompt_round_action()
+        if action == "quit":
+            break
+        elif action == "new":
+            session.reset()
+        else:
+            session.next_round()
+
+
+def _prompt_round_action() -> str:
+    """Ask what to do after a round: continue the match, reset it, or quit."""
+    console.print("\n[bold]Que voulez-vous faire ?[/bold]")
+    console.print(
+        "  [cyan][1][/cyan] Manche suivante — même match, score conservé "
+        "[bold](défaut)[/bold]"
+    )
+    console.print("  [cyan][2][/cyan] Nouvelle partie — même adversaire, score remis à zéro")
+    console.print("  [cyan][3][/cyan] Quitter")
+    choice = Prompt.ask("Votre choix", choices=["1", "2", "3"], default="1")
+    return {"1": "next", "2": "new", "3": "quit"}[choice]
 
 
 def _prompt_ui_mode() -> str:

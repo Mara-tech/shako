@@ -24,6 +24,7 @@ Python env: `pip install -e .` from root. PYTHONPATH = project root.
 | `core/types.py` | `State`, `ObservableState`, `Action`, `GameResult` |
 | `core/engine.py` | `SimulationEngine` — turn loop + multiprocessing batch |
 | `core/stats.py` | `StatsCollector` — win rates, score distributions |
+| `core/match_session.py` | `MatchSession` — round counter, first-player rotation, per-seat win tally for a human-vs-agent match |
 | `rl/mcts_agent.py` | UCT + per-simulation determinization |
 | `rl/self_play.py` | `SelfPlayTrainer` + `PolicyMCTSAgent` (saved to `games/<name>/models/`) |
 | `rl/greedy_agent.py` | 1-step lookahead with pluggable `eval_fn` |
@@ -34,7 +35,7 @@ Python env: `pip install -e .` from root. PYTHONPATH = project root.
 | `cli/main.py` | interactive game selection and simulation |
 | `ui/rich_agent.py` | `RichHumanAgent` — Rich-styled human player (coloured board, styled actions) |
 | `ui/textual_agent.py` | `TextualHumanAgent` — bridge between engine thread and Textual event loop |
-| `ui/textual_app.py` | `ShakTUIApp` — Textual TUI application (board panel, action list, replay) |
+| `ui/textual_app.py` | `ShakTUIApp` — Textual TUI application (board panel, action list, next round / new match) |
 | `ui/grid_widget.py` | `GridWidget` — clickable NxM grid widget (column mode for Connect Four, cell mode for Tic-Tac-Toe) |
 
 ## Adding a new game

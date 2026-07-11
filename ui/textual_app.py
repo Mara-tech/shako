@@ -10,6 +10,7 @@ from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from core.base_adapter import BaseAdapter
 from core.engine import SimulationEngine
+from core.match_session import MatchSession
 from core.types import Action, ObservableState
 from ui.textual_agent import TextualHumanAgent
 
@@ -44,7 +45,8 @@ class ShakTUIApp(App):
 
     BINDINGS = [
         Binding("q", "quit_game", "Quit"),
-        Binding("r", "replay", "Play again"),
+        Binding("n", "next_round", "Next round"),
+        Binding("m", "new_match", "New match"),
     ]
 
     def __init__(
@@ -61,6 +63,8 @@ class ShakTUIApp(App):
         self._human_seat = human_seat
         self._legal_actions: list[Action] = []
         self._accepting_input = False
+        self._game_over = False
+        self._session = MatchSession(adapter.get_n_players(), human_seat)
 
         self._grid_config: dict | None = getattr(adapter, "get_grid_config", lambda: None)()
         agent.app = self
@@ -93,21 +97,29 @@ class ShakTUIApp(App):
 
     def _start_engine_thread(self) -> None:
         self._agent.reset()
+        self._game_over = False
         n = self._adapter.get_n_players()
-        agents = [
+        seats = [
             self._agent if pid == self._human_seat else copy.deepcopy(self._bot_agent)
             for pid in range(n)
         ]
-        engine = SimulationEngine(self._adapter, agents, record=False, max_turns=1000)
+        engine = SimulationEngine(
+            self._adapter, self._session.rotate(seats), record=False, max_turns=1000
+        )
 
         threading.Thread(target=engine.run_game, daemon=True).start()
+
+    def _tally_str(self) -> str:
+        wins = "  ".join(f"P{s}:{w}" for s, w in sorted(self._session.wins.items()))
+        return f"{wins}  Draws:{self._session.draws}"
 
     # ---- callbacks from engine thread via call_from_thread ----
 
     def on_game_start_ui(self, player_id: int, n_players: int) -> None:
-        self.sub_title = f"You = Player {player_id}"
+        self.sub_title = f"Round {self._session.round_number} | {self._tally_str()} | You = Player {player_id}"
         self.query_one("#status", Static).update(
-            f"[dim]Game started. You are Player {player_id} of {n_players}.[/dim]"
+            f"[dim]Round {self._session.round_number} started. "
+            f"You are Player {player_id} of {n_players}.[/dim]"
         )
 
     def _render_board(self, obs_state: ObservableState) -> None:
@@ -154,24 +166,31 @@ class ShakTUIApp(App):
 
     def on_game_end_ui(self, scores: dict[int, float]) -> None:
         self._accepting_input = False
+        self._game_over = True
         self.query_one("#actions", ListView).clear()
 
-        hs = self._human_seat
         top_score = max(scores.values())
         winners = [p for p, s in scores.items() if s == top_score]
+        winner_id = winners[0] if len(winners) == 1 else None
+        human_pid = self._session.human_player_id()
 
-        if len(winners) > 1:
+        if winner_id is None:
             msg = "[yellow]Draw![/yellow]"
-        elif hs in winners:
+        elif winner_id == human_pid:
             msg = "[bold green]You won![/bold green]"
         else:
-            msg = f"[bold red]Player {winners[0]} won.[/bold red]"
+            msg = f"[bold red]Player {winner_id} won.[/bold red]"
+
+        self._session.record(winner_id)
 
         score_str = "  ".join(f"P{p}: {s}" for p, s in sorted(scores.items()))
         self.query_one("#status", Static).update(
             f"{msg}  {score_str}\n"
-            "[dim]Press [bold]r[/bold] to play again or [bold]q[/bold] to quit.[/dim]"
+            f"[dim]Round {self._session.round_number} tally — {self._tally_str()}[/dim]\n"
+            "[dim]Press [bold]n[/bold] for next round, [bold]m[/bold] for new match, "
+            "or [bold]q[/bold] to quit.[/dim]"
         )
+        self.sub_title = f"Round {self._session.round_number} | {self._tally_str()}"
 
     # ---- user input handlers ----
 
@@ -198,9 +217,7 @@ class ShakTUIApp(App):
 
     # ---- key bindings ----
 
-    def action_replay(self) -> None:
-        if self._accepting_input:
-            return
+    def _reset_board_widgets(self) -> None:
         if self._grid_config:
             from ui.grid_widget import GridWidget
 
@@ -210,8 +227,22 @@ class ShakTUIApp(App):
             )
         else:
             self.query_one("#board", Static).update("")
-        self.query_one("#status", Static).update("[dim]Starting new game…[/dim]")
         self.query_one("#actions", ListView).clear()
+
+    def action_next_round(self) -> None:
+        if self._accepting_input or not self._game_over:
+            return
+        self._session.next_round()
+        self._reset_board_widgets()
+        self.query_one("#status", Static).update("[dim]Starting next round…[/dim]")
+        self._start_engine_thread()
+
+    def action_new_match(self) -> None:
+        if self._accepting_input or not self._game_over:
+            return
+        self._session.reset()
+        self._reset_board_widgets()
+        self.query_one("#status", Static).update("[dim]Starting new match…[/dim]")
         self._start_engine_thread()
 
     def action_quit_game(self) -> None:
