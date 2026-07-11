@@ -161,13 +161,13 @@ def test_player1_win_increments_correct_score() -> None:
 
 # ------------------------------------------------------------------ draw detection
 
-def test_draw_starts_new_round_no_score() -> None:
+def test_draw_starts_new_round_half_point_each() -> None:
     adapter = TicTacToeAdapter(starting_player="constant", max_rounds=5)
     # One cell left, no winner possible
     board = [1, 2, 1, 1, 2, 1, 2, 1, 0]
     state = _state(board, current=1, round_=0)
     new = adapter.apply_action(state, _act(8), player_id=1)
-    assert new.data["scores"] == {0: 0, 1: 0}
+    assert new.data["scores"] == {0: 0.5, 1: 0.5}
     assert new.data["board"] == [0] * 9
     assert new.data["round"] == 1
     assert not new.data["game_over"]

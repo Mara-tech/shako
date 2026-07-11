@@ -13,6 +13,6 @@ The game is played on a 3×3 grid. One player is assigned **X** and the other **
 
 ### END OF THE GAME
 
-The game ends immediately when one player occupies three cells in a row — horizontally, vertically, or along either diagonal. That player wins the round. If all nine cells are filled without a winner, the round is a draw and no point is awarded.
+The game ends immediately when one player occupies three cells in a row — horizontally, vertically, or along either diagonal. That player wins the round (1 point). If all nine cells are filled without a winner, the round is a draw and each player receives half a point (0.5).
 
-In a multi-round session, the player who wins the most rounds wins the game.
+In a multi-round session, the player with the most cumulative points across rounds wins the game.

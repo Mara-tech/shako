@@ -39,7 +39,8 @@ class TicTacToeAdapter(BaseAdapter):
         current       : int              — player to move
         round         : int              — current round index (0-based)
         round_starter : int              — player who opened the current round
-        scores        : {0: int, 1: int} — cumulative round wins
+        scores        : {0: float, 1: float} — cumulative match points
+                         (win = +1, draw = +0.5 each)
         game_over     : bool
     """
 
@@ -106,6 +107,11 @@ class TicTacToeAdapter(BaseAdapter):
             d["scores"][w] += 1
             self._end_round(d)
         elif all(cell != 0 for cell in d["board"]):
+            # Match-point scoring: a draw is worth half a win to each player,
+            # so MCTS backprop can tell "secured a draw" apart from "lost the
+            # round" (both left the mover's own score unchanged otherwise).
+            d["scores"][0] += 0.5
+            d["scores"][1] += 0.5
             self._end_round(d)
         else:
             d["current"] = 1 - player_id

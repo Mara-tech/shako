@@ -84,7 +84,7 @@ from llm.adapter_generator import AdapterGenerator
 
 description = """
 Two-player Tic-Tac-Toe on a 3x3 grid. Players alternate placing X / O.
-First to align three marks wins (+1). Full board with no winner is a draw (0,0).
+First to align three marks wins (+1). Full board with no winner is a draw (0.5, 0.5).
 Player 0 moves first.
 """
 

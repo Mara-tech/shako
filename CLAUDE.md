@@ -62,5 +62,6 @@ the analyzer, and the optimizer without modification.
 - **Run `pytest tests/` before marking a task done.** If tests fail, fix them before concluding.
 - **Pick the right reference implementation** for a new game: `nim/` by default, `cards/` for hidden information, `tictactoe/` for multi-round or configurable starting player.
 - **Create a `rules.md`** in English in the game's folder when adding a new game. Describe the rules in plain language: players, actions, win/draw/loss conditions, edge cases.
+- **`get_scores()` must give a draw a value strictly between a win and a loss** (e.g. 0.5 when a win is 1.0 and a loss is 0.0), never the same value as a loss. MCTS backprop (`rl/mcts_agent.py`) uses these raw scores as its reward signal, so a draw scored identically to a loss makes the search permanently indifferent between "secure the draw" and "lose" — more simulations won't fix it, since the tie is exact, not noise. See `games/connect4/adapter.py`'s `get_scores` for the reference pattern.
 - **Create a test** when adding a new game in `tests/` folder.
 - **Update the Module map table in this file** when a new top-level module is added to the project.
