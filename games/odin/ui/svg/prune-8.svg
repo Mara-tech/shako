@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280" viewBox="0 0 200 280">
+  <defs>
+    
+  </defs>
+  <rect x="1.4" y="1.4" width="197.2" height="277.2" rx="12" ry="12" fill="#faf7f2" stroke="#be92c8" stroke-width="2.8"></rect>
+  <text class="rune" x="10" y="34" font-size="24">ᛞ</text>
+  <text class="rune" x="190" y="270" font-size="24" text-anchor="end" transform="rotate(180 178 258)">ᛞ</text>
+  <circle cx="100" cy="140" r="62" fill="#f2d6f9"></circle>
+  <text class="num" x="100" y="166" font-size="72" text-anchor="middle">8</text>
+</svg>
