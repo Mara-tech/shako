@@ -11,7 +11,7 @@ Requires Python 3.9+ (`from __future__ import annotations` keeps the code
 compatible; the project is pinned to 3.11 in `pyproject.toml`).
 
 ```bash
-git clone <your-repo-url> shako
+git clone https://github.com/Mara-tech/shako shako
 cd shako
 python -m venv .venv && source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
