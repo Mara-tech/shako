@@ -46,6 +46,7 @@ Subclass `BaseAdapter` and implement its 9 abstract methods. Reference implement
 - **Perfect information:** `games/nim/adapter.py` (canonical, simplest)
 - **Hidden information:** `games/cards/adapter.py` (uses `sample_state` for MCTS determinization)
 - **Grid-based UI:** `games/tictactoe/adapter.py` (cell mode) or `games/connect4/adapter.py` (column mode) — `get_grid_config`/`get_grid_render_config`/`get_action_for_click` wiring for the Textual clickable-grid widget
+- **Rules that run outside Python:** `games/aot_reconquete/adapter.py` — the game is TypeScript, reached over a JSON stdio pipe (`bridge.py` holds the transport). Shows the two things such an adapter owes: `__getstate__`/`__setstate__` dropping the subprocess so `run_batch` can pickle it, and a `clone_state` that stays in Python so MCTS never pays a round trip
 
 Override `get_action_label(action)` in adapters with large combinatorial action spaces
 to return a coarse category string — prevents spurious rare-action warnings.
