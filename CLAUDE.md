@@ -25,6 +25,7 @@ Python env: `pip install -e .` from root. PYTHONPATH = project root.
 | `core/engine.py` | `SimulationEngine` — turn loop + multiprocessing batch |
 | `core/stats.py` | `StatsCollector` — win rates, score distributions |
 | `core/match_session.py` | `MatchSession` — round counter, first-player rotation, per-seat win tally for a human-vs-agent match |
+| `core/stdio.py` | `make_stdio_printable()` — switches stdout/stderr to UTF-8 when their encoding cannot carry the characters the CLI and the UI draw (a redirected Windows stdout is cp1252). Called by `cli/__main__.py` and `scripts/train.py` |
 | `rl/mcts_agent.py` | UCT + per-simulation determinization |
 | `rl/self_play.py` | `SelfPlayTrainer` + `PolicyMCTSAgent` (saved to `games/<name>/models/`) |
 | `rl/greedy_agent.py` | 1-step lookahead with pluggable `eval_fn` |

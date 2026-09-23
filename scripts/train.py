@@ -230,4 +230,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # `SelfPlayTrainer` draws a block-character progress bar, which a cp1252 stdout cannot
+    # encode — the same failure `python -m cli` had on Windows. See core/stdio.py.
+    from core.stdio import make_stdio_printable
+
+    make_stdio_printable()
     main()
