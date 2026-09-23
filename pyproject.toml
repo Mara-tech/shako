@@ -35,3 +35,13 @@ disable_error_code = ["arg-type", "type-arg"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# Stated rather than inherited: ruff's default selection is not a constant. It grew, and this
+# project selects nothing and pins no version, so CI picked up the wider set and went red with
+# no Python changed — b31a3c4, green on 2026-07-11, reports the same 63 findings under ruff
+# 0.16.7 as master does today, the only commits since being a README edit and two model blobs.
+# These four are what ruff used to select, and what the project is green under: E4 imports,
+# E7 statements, E9 syntax and IO errors, F all of pyflakes. Widening the set is worth doing —
+# BLE001, B023 and DTZ005 are real findings — but it is 63 edits and a decision of its own.
+select = ["E4", "E7", "E9", "F"]
