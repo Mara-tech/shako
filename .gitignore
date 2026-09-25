@@ -218,3 +218,6 @@ __marimo__/
 .streamlit/secrets.toml
 
 .claude/
+
+# Games recorded by scripts/play_aot_live.py
+games/aot_reconquete/recordings/
