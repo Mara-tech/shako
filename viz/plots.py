@@ -47,7 +47,9 @@ def plot_simulation_results(
     # --- Score distribution ---
     ax = axes[1]
     score_data = [[r.scores[pid] for r in results if pid in r.scores] for pid in player_ids]
-    bp = ax.boxplot(score_data, labels=[str(pid) for pid in player_ids], patch_artist=True)
+    bp = ax.boxplot(score_data, patch_artist=True)
+    # Not boxplot(labels=...): renamed tick_labels in matplotlib 3.9, removed in 3.11.
+    ax.set_xticks(range(1, len(player_ids) + 1), [str(pid) for pid in player_ids])
     for patch in bp["boxes"]:
         patch.set_facecolor("steelblue")
         patch.set_alpha(0.6)
