@@ -104,6 +104,7 @@ def test_on_action_applied_sees_every_applied_action_in_order() -> None:
         on_action_applied=lambda *args: calls.append(args),
     )
     result = engine.run_game()
+    assert result.actions is not None
 
     assert [(pid, action) for _, action, pid, _ in calls] == [
         (pid, action) for _, pid, action in result.actions
@@ -129,6 +130,7 @@ def test_on_action_applied_sees_the_substituted_action_not_the_choice() -> None:
         on_action_applied=lambda *args: calls.append(args),
     )
     result = engine.run_game()
+    assert result.actions is not None
 
     assert result.illegal_action_counts[0] > 0
     played_by_0 = [action for _, action, pid, _ in calls if pid == 0]
