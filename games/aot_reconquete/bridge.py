@@ -27,14 +27,22 @@ Three behaviours worth stating, because each one was a decision:
 * **Closing stdin stops the bridge**, which is the protocol's own shutdown: there is no
   `quit` method. That also means an orphaned process ends by itself if this interpreter
   dies without unwinding — the pipe closes with it.
+* **The live channel and the recording are parameters, never inherited.** The bridge reads
+  `SHAKO_LIVE_PORT` and `SHAKO_RECORD_FILE` from its environment, and a child inherits this
+  interpreter's. Left alone, one `export SHAKO_LIVE_PORT=8090` in a shell would make every
+  bridge — each test's, each MCTS worker's — try to bind the same port, and every one but the
+  first would die at start. So both are removed from the child's environment and set only from
+  `live_port` / `record_file`: a bridge serves a channel because its caller asked for one.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import threading
+import time
 import weakref
 from collections import deque
 from pathlib import Path
@@ -48,6 +56,20 @@ _SIBLING_DIR_NAME = "aot-reconquete.js"
 _TS_NODE_BIN = Path("node_modules") / "ts-node" / "dist" / "bin.js"
 _TS_CONFIG = Path("tsconfig.headless.json")
 _BRIDGE_ENTRY_POINT = Path("src") / "game" / "headless" / "shakoBridgeMain.ts"
+
+# The two opt-ins the bridge reads from its environment — `shako-bridge.md`, "The live
+# channel" and "Recording a game". Only ever set from a parameter; see the module docstring.
+LIVE_PORT_ENV_VAR = "SHAKO_LIVE_PORT"
+RECORD_FILE_ENV_VAR = "SHAKO_RECORD_FILE"
+
+# The line the bridge writes on stderr once its channel listens. With `live_port=0` the port is
+# the system's choice, and this line is the only place the bridge says which one it got.
+_LIVE_CHANNEL_LINE = re.compile(r"watch the game on http://[^\s/]+:(\d+)/")
+
+# How long the bound port is waited for after the handshake. The line is written before the
+# bridge reads its first request, so by the time `describe` is answered it is in the pipe; this
+# only covers the drain thread not having read it yet.
+_LIVE_PORT_TIMEOUT_S = 5.0
 
 # The wire format this client was written against — `describe` answers it, and a mismatch is
 # refused at the handshake rather than misread request by request.
@@ -149,14 +171,37 @@ class ShakoBridge:
     bridge itself serialises its handlers, so nothing else is needed.
     """
 
-    def __init__(self, game_dir: str | os.PathLike[str] | None = None, node: str = "node") -> None:
+    def __init__(
+        self,
+        game_dir: str | os.PathLike[str] | None = None,
+        node: str = "node",
+        live_port: int | None = None,
+        record_file: str | os.PathLike[str] | None = None,
+    ) -> None:
         """Args:
             game_dir: the `aot-reconquete.js` checkout. `None` resolves it as documented in
                 `resolve_game_dir`.
             node: the Node executable. Overridable for an environment where it is not on PATH.
+            live_port: serve the live channel (`GET /live`) on this loopback port. `0` lets
+                the system pick one; `bound_live_port` then says which. `None`: no channel.
+            record_file: write the published game to this file, for the game's "Replay a
+                Game". A relative path is taken from *this* process's working directory —
+                the bridge runs in the game repository, so passed as is it would land there.
+                `None`: nothing is written.
+
+        Neither does anything by itself: the channel and the file show what a client
+        `publish`es, and nothing else — see `publisher.py`.
         """
+        if live_port is not None and (
+            isinstance(live_port, bool) or not isinstance(live_port, int) or not 0 <= live_port <= 65535
+        ):
+            raise ValueError(f"live_port is a port number between 0 and 65535, not {live_port!r}")
         self.game_dir = resolve_game_dir(game_dir)
         self.node = node
+        self.live_port = live_port
+        self.record_file = Path(record_file).expanduser().resolve() if record_file is not None else None
+        # The port the channel actually listens on, read from the bridge after it started.
+        self.bound_live_port: int | None = None
         self._lock = threading.RLock()
         self._process: subprocess.Popen[str] | None = None
         self._finalizer: weakref.finalize | None = None
@@ -181,6 +226,8 @@ class ShakoBridge:
             self._finalizer = weakref.finalize(self, _stop_process, self._process)
             try:
                 self._handshake()
+                if self.live_port is not None:
+                    self.bound_live_port = self._read_bound_live_port()
             except Exception:
                 self.close()
                 raise
@@ -241,10 +288,20 @@ class ShakoBridge:
             str(self.game_dir / _TS_CONFIG),
             str(self.game_dir / _BRIDGE_ENTRY_POINT),
         ]
+        env = {
+            name: value
+            for name, value in os.environ.items()
+            if name not in (LIVE_PORT_ENV_VAR, RECORD_FILE_ENV_VAR)
+        }
+        if self.live_port is not None:
+            env[LIVE_PORT_ENV_VAR] = str(self.live_port)
+        if self.record_file is not None:
+            env[RECORD_FILE_ENV_VAR] = str(self.record_file)
         try:
             process = subprocess.Popen(
                 argv,
                 cwd=str(self.game_dir),
+                env=env,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -272,6 +329,25 @@ class ShakoBridge:
             )
         self.players = int(described.get("players", 0))
         self.current_player = int(described.get("currentPlayer", 0))
+
+    def _read_bound_live_port(self) -> int:
+        """The port the channel listens on, as the bridge reported it on stderr.
+
+        A port the bridge could not bind never gets here: it refuses to start, and the
+        handshake fails quoting its stderr (`EADDRINUSE` for a port already taken).
+        """
+        deadline = time.monotonic() + _LIVE_PORT_TIMEOUT_S
+        while True:
+            for line in list(self._stderr_tail):
+                found = _LIVE_CHANNEL_LINE.search(line)
+                if found:
+                    return int(found.group(1))
+            if time.monotonic() > deadline:
+                raise BridgeProtocolError(
+                    f"the bridge was asked for a live channel on port {self.live_port} and "
+                    f"never said it was listening ({self._death_note()})"
+                )
+            time.sleep(0.01)
 
     def _exchange(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         process = self._process

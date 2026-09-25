@@ -98,3 +98,37 @@ want to reclaim the machine without waiting for the remaining iterations.
 
 If you pass `--jordan-server-url` but `jordan-py` is not installed, the script
 prints one line and continues training normally with stdout output only.
+
+---
+
+# scripts/play_aot_live.py — Watch an MCTS game of AOT Reconquête, and record it
+
+Plays one AOT Reconquête game with MCTS against the TypeScript game, publishing every
+move actually played to the game's own page (live) and to a file that the page's
+"Replay a Game" opens. The search's own simulations are never shown or recorded.
+
+```bash
+# in aot-reconquete.js: once `npm ci`, then
+npm run dev                                   # the page, on http://localhost:8080
+# in shako
+python scripts/play_aot_live.py --seed 168    # prints the URL and the recording's path
+# open http://localhost:8080/?spectate=8090
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port` | `8090` | Live channel port; `0` lets the system pick one (the script prints it) |
+| `--no-live` | | No live channel |
+| `--record` | `games/aot_reconquete/recordings/<time>.json` | Recording file (git-ignored folder) |
+| `--no-record` | | No recording |
+| `--seed` | *(new game each run)* | Pins the board and the scouts |
+| `--time-ms` | `2000` | MCTS thinking time per move |
+| `--rollout-depth` | `10` | MCTS random playout depth |
+| `--max-turns` | `300` | Stop after this many moves |
+| `--page` | `http://localhost:8080` | Where `npm run dev` serves the page |
+| `--game-dir` | `$AOT_RECONQUETE_DIR`, or a sibling checkout | The `aot-reconquete.js` checkout |
+
+One game, in one process: an adapter with a live port or a recording file refuses to be
+copied into `run_batch` workers (they would all bind the same port and write the same file).
+The script's docstring has the full walk-through.
+

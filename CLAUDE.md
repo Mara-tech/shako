@@ -22,7 +22,7 @@ Python env: `pip install -e .` from root. PYTHONPATH = project root.
 | `core/base_adapter.py` | `BaseAdapter` ABC — the single integration point |
 | `core/base_agent.py` | `BaseAgent` ABC |
 | `core/types.py` | `State`, `ObservableState`, `Action`, `GameResult` |
-| `core/engine.py` | `SimulationEngine` — turn loop + multiprocessing batch |
+| `core/engine.py` | `SimulationEngine` — turn loop + multiprocessing batch; `on_action_applied` hook reports each action actually played (after illegal/timeout substitution) |
 | `core/stats.py` | `StatsCollector` — win rates, score distributions |
 | `core/match_session.py` | `MatchSession` — round counter, first-player rotation, per-seat win tally for a human-vs-agent match |
 | `core/stdio.py` | `make_stdio_printable()` — switches stdout/stderr to UTF-8 when their encoding cannot carry the characters the CLI and the UI draw (a redirected Windows stdout is cp1252). Called by `cli/__main__.py` and `scripts/train.py` |
@@ -46,7 +46,7 @@ Subclass `BaseAdapter` and implement its 9 abstract methods. Reference implement
 - **Perfect information:** `games/nim/adapter.py` (canonical, simplest)
 - **Hidden information:** `games/cards/adapter.py` (uses `sample_state` for MCTS determinization)
 - **Grid-based UI:** `games/tictactoe/adapter.py` (cell mode) or `games/connect4/adapter.py` (column mode) — `get_grid_config`/`get_grid_render_config`/`get_action_for_click` wiring for the Textual clickable-grid widget
-- **Rules that run outside Python:** `games/aot_reconquete/adapter.py` — the game is TypeScript, reached over a JSON stdio pipe (`bridge.py` holds the transport). Shows the two things such an adapter owes: `__getstate__`/`__setstate__` dropping the subprocess so `run_batch` can pickle it, and a `clone_state` that stays in Python so MCTS never pays a round trip
+- **Rules that run outside Python:** `games/aot_reconquete/adapter.py` — the game is TypeScript, reached over a JSON stdio pipe (`bridge.py` holds the transport). Shows the two things such an adapter owes: `__getstate__`/`__setstate__` dropping the subprocess so `run_batch` can pickle it, and a `clone_state` that stays in Python so MCTS never pays a round trip. `publisher.py` publishes the game actually played to the game's live page and recording, as an `on_action_applied` hook (`scripts/play_aot_live.py`)
 
 Override `get_action_label(action)` in adapters with large combinatorial action spaces
 to return a coarse category string — prevents spurious rare-action warnings.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from core.base_agent import BaseAgent
 from core.engine import SimulationEngine
 from core.types import Action, ObservableState
@@ -77,3 +79,73 @@ def test_illegal_action_is_replaced_by_random_and_counted() -> None:
     assert bad_count > 0
     # Player 1 always plays a legal action.
     assert result.illegal_action_counts.get(1, 0) == 0
+
+
+class _RaisingNimAdapter(NimAdapter):
+    """Nim whose `apply_action` refuses the move — the shape of a game that raises on a move."""
+
+    def apply_action(self, state, action, player_id):  # type: ignore[no-untyped-def]
+        raise RuntimeError("refused by the game")
+
+
+def test_on_action_applied_sees_every_applied_action_in_order() -> None:
+    """One call per applied action, in order, with the states on either side of it.
+
+    Compared with `GameResult.actions`, which records the same actions from inside the loop:
+    the hook is the live counterpart of `record=True`.
+    """
+    calls: list[tuple] = []
+    adapter = NimAdapter(n_sticks=11, max_take=3)
+    engine = SimulationEngine(
+        adapter,
+        [RandomAgent(seed=0), RandomAgent(seed=1)],
+        record=True,
+        seed=0,
+        on_action_applied=lambda *args: calls.append(args),
+    )
+    result = engine.run_game()
+    assert result.actions is not None
+
+    assert [(pid, action) for _, action, pid, _ in calls] == [
+        (pid, action) for _, pid, action in result.actions
+    ]
+    # Each call starts where the previous one ended, from the initial state to a terminal one.
+    assert calls[0][0] == adapter.get_initial_state()
+    for (_, _, _, reached), (following, _, _, _) in zip(calls, calls[1:]):
+        assert following == reached
+    assert adapter.is_terminal(calls[-1][3])
+    for state, action, pid, reached in calls:
+        assert reached == adapter.apply_action(state, action, pid)
+
+
+def test_on_action_applied_sees_the_substituted_action_not_the_choice() -> None:
+    """The hook's reason to be in the engine: an illegal choice is replaced, and the
+    replacement is what was played — so it is what the hook must be told."""
+    calls: list[tuple] = []
+    engine = SimulationEngine(
+        NimAdapter(n_sticks=11, max_take=3),
+        [_AlwaysIllegalAgent(), RandomAgent(seed=0)],
+        record=True,
+        seed=0,
+        on_action_applied=lambda *args: calls.append(args),
+    )
+    result = engine.run_game()
+    assert result.actions is not None
+
+    assert result.illegal_action_counts[0] > 0
+    played_by_0 = [action for _, action, pid, _ in calls if pid == 0]
+    assert played_by_0, "player 0 never played"
+    assert all("__never_legal__" not in action.data for action in played_by_0)
+    assert [a for _, a, _, _ in calls] == [a for _, _, a in result.actions]
+
+
+def test_on_action_applied_is_not_called_when_apply_action_raises() -> None:
+    calls: list[tuple] = []
+    engine = SimulationEngine(
+        _RaisingNimAdapter(n_sticks=11, max_take=3),
+        [RandomAgent(seed=0), RandomAgent(seed=1)],
+        on_action_applied=lambda *args: calls.append(args),
+    )
+    with pytest.raises(RuntimeError, match="refused"):
+        engine.run_game()
+    assert calls == []

@@ -38,6 +38,20 @@ call; the mount the game does inside it is most of the rest.
   docstring requires. The bridge already honours it — out of combat the end of turn is always
   offered, in combat the capture is — so this file checks and *reports*, rather than
   fabricating an action to hide a bridge that stopped honouring it.
+
+## Watching the game, and recording it
+`live_port` and `record_file` hand the bridge its two opt-ins — the live channel the game's
+page follows with `?spectate=<port>`, and the file its "Replay a Game" opens. Both show only
+what is *published*, and this stateless adapter publishes nothing: the line of play is known
+to the engine alone. `publisher.py` follows it and publishes it, through this adapter's own
+bridge — the process that serves the channel and writes the file.
+
+An adapter with either set **refuses to be pickled**, which is what `run_batch(n_workers > 1)`
+does to it: every worker would launch its own bridge on the same port — all but one dying at
+start — and all of them would write the same file, each game overwriting the last. A port and
+a file per worker was considered and set aside: a page follows one channel and a file holds
+one game, so it would take a tab per worker and keep only each worker's last game — for a
+batch, which is run for its statistics and not to be watched.
 """
 
 from __future__ import annotations
@@ -47,6 +61,7 @@ import json
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Self
 
 from core.base_adapter import BaseAdapter
@@ -85,16 +100,31 @@ class AotReconqueteAdapter(BaseAdapter):
     sibling of the shako checkout.
     """
 
-    def __init__(self, game_dir: str | None = None, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        game_dir: str | None = None,
+        seed: int | None = None,
+        live_port: int | None = None,
+        record_file: str | None = None,
+    ) -> None:
         """Args:
             game_dir: the `aot-reconquete.js` checkout. `None` resolves it as described above.
             seed: pins the game `get_initial_state` builds. `None` (default) lets the game
                 roll its own scouts, so every game of a batch differs — which is what a
                 balance study wants. A seed makes every game of that batch *the same game*;
                 use it to reproduce one, not to run a hundred.
+            live_port: serve the live channel on this loopback port, for the game's page at
+                `?spectate=<port>`. `0` picks a free one (`bridge().bound_live_port`).
+                `None` (default): no channel.
+            record_file: write the published game to this file, for "Replay a Game".
+                Relative to the current directory. `None` (default): nothing is written.
         """
         self.game_dir = game_dir
         self.seed = seed
+        self.live_port = live_port
+        # Resolved now, against the directory the caller stands in: the bridge runs in the
+        # game repository, and a later `chdir` must not move the file either.
+        self.record_file = str(Path(record_file).expanduser().resolve()) if record_file else None
         self._bridge: ShakoBridge | None = None
         # Guards the lazy launch below. `core/engine.py` runs an agent in a worker thread when
         # `max_action_ms` is set, and a timed-out agent keeps running: two threads reaching a
@@ -238,7 +268,9 @@ class AotReconqueteAdapter(BaseAdapter):
         """
         with self._lock:
             if self._bridge is None:
-                started = ShakoBridge(self.game_dir)
+                started = ShakoBridge(
+                    self.game_dir, live_port=self.live_port, record_file=self.record_file
+                )
                 started.start()
                 self._bridge = started
                 if (started.players, started.current_player) != (_PLAYER_COUNT, _ONLY_PLAYER):
@@ -270,7 +302,18 @@ class AotReconqueteAdapter(BaseAdapter):
         `run_batch(n_workers > 1)` pickles the adapter into `spawn`ed workers, and a
         `subprocess.Popen` cannot be pickled. Dropping it here is what makes the batch run;
         `bridge()` relaunches one per worker, on demand.
+
+        Refused outright when the adapter serves a live channel or records: every copy would
+        launch its own bridge on the same port and write the same file. See the module
+        docstring for why a port and a file per worker was not the answer.
         """
+        if self.live_port is not None or self.record_file is not None:
+            raise AotReconqueteError(
+                "an AotReconqueteAdapter with a live_port or a record_file cannot be copied "
+                "into another process: each copy would launch its own bridge on the same port "
+                "and write the same file. Play such a game in this process — "
+                "run_game(), or run_batch(n_workers=1) — or build the adapter without them."
+            )
         state = self.__dict__.copy()
         state["_bridge"] = None
         state.pop("_lock", None)  # a lock cannot be pickled either, and means nothing elsewhere
