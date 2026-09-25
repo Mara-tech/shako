@@ -5,11 +5,15 @@ import random
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from typing import Callable
 
 from core.base_adapter import BaseAdapter
 from core.base_agent import BaseAgent
-from core.types import Action, GameResult
+from core.types import Action, GameResult, State
 
+
+# `(state, action, player_id, next_state)`, called once per action the engine applied.
+ActionAppliedHook = Callable[[State, Action, int, State], None]
 
 _TIMEOUT_SENTINEL = "__shako_timeout__"
 
@@ -27,7 +31,8 @@ class SimulationEngine:
       2. fetch that player's observable state and legal actions,
       3. ask the agent to pick an action (optionally under a timeout),
       4. validate it against the legal set,
-      5. apply it via the adapter, repeat until terminal.
+      5. apply it via the adapter, tell `on_action_applied` if set, repeat
+         until terminal.
 
     Defensive behaviour:
       * Illegal actions (including timeouts) are silently replaced by a uniform
@@ -44,6 +49,7 @@ class SimulationEngine:
         max_turns: int = 10_000,
         record: bool = False,
         seed: int | None = None,
+        on_action_applied: ActionAppliedHook | None = None,
     ) -> None:
         """Args:
             adapter: the game implementation.
@@ -55,6 +61,15 @@ class SimulationEngine:
                 `GameResult.actions` as `(turn_index, player_id, action)`.
             seed: seed for the engine's tiebreak RNG (used when replacing
                 illegal actions). The adapter and agents manage their own RNGs.
+            on_action_applied: called as `(state, action, player_id, next_state)`
+                after every action the adapter applied, and only then: the
+                action is the one actually played — after an illegal or
+                timed-out choice was replaced — and an `apply_action` that
+                raises calls nothing. It is how a caller follows the real line
+                of play, which agents cannot: `choose_action` sees the choice,
+                not the substitution, and `on_state_update` sees the state, not
+                the action. With `run_batch(n_workers > 1)` it is pickled with
+                the engine, so each worker calls its own copy.
         """
         if len(agents) != adapter.get_n_players():
             raise ValueError(
@@ -65,6 +80,7 @@ class SimulationEngine:
         self.max_action_ms = max_action_ms
         self.max_turns = max_turns
         self.record = record
+        self.on_action_applied = on_action_applied
         self._rng = random.Random(seed)
 
     def run_game(self) -> GameResult:
@@ -115,7 +131,10 @@ class SimulationEngine:
                 if self.record:
                     recording.append((n_turns, pid, action))
 
-                state = self.adapter.apply_action(state, action, pid)
+                next_state = self.adapter.apply_action(state, action, pid)
+                if self.on_action_applied is not None:
+                    self.on_action_applied(state, action, pid, next_state)
+                state = next_state
                 n_turns += 1
 
                 for obs_pid, obs_agent in observers:
